@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec /private/tmp/image-compressor-libreoffice/LibreOfficeDev.app/Contents/MacOS/soffice "$@"
