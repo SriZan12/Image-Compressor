@@ -8,21 +8,36 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme =
-  darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80,
-  )
+    darkColorScheme(
+        primary = FigmaUi.PrimaryHero,
+        secondary = FigmaUi.Primary,
+        tertiary = FigmaUi.Green,
+        background = FigmaUi.Ink,
+        surface = FigmaUi.Ink,
+        onPrimary = Color.White,
+        onSecondary = Color.White,
+        onTertiary = FigmaUi.Ink,
+        onBackground = Color.White,
+        onSurface = Color.White,
+    )
 
 private val LightColorScheme =
-  lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40,
-  )
+    lightColorScheme(
+        primary = FigmaUi.PrimaryHero,
+        secondary = FigmaUi.Primary,
+        tertiary = FigmaUi.Green,
+        background = FigmaUi.Background,
+        surface = FigmaUi.Surface,
+        onPrimary = Color.White,
+        onSecondary = Color.White,
+        onTertiary = FigmaUi.GreenDark,
+        onBackground = FigmaUi.Ink,
+        onSurface = FigmaUi.Ink,
+    )
 
 @Composable
 fun ImageCompressorTheme(
