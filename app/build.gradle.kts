@@ -49,7 +49,8 @@ room {
 }
 
 dependencies {
-  val composeBom = platform(libs.androidx.compose.bom)
+  implementation(libs.androidx.compose.ui.text.google.fonts)
+    val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
 
@@ -88,4 +89,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.room.ktx)
   ksp(libs.androidx.room.compiler)
+
+    //material-icons
+    implementation(libs.material.icons.core)
 }
