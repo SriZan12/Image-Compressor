@@ -39,7 +39,7 @@ import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.BottomActionBar
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.FigmaChip
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
+import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.FigmaTextField
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.components.SectionCard
@@ -261,7 +261,7 @@ fun CompressionSettingsScreen(
     }
 
     BottomActionBar {
-      FigmaPrimaryButton(
+      PrimaryButton(
         text = "Compress ${state.selectedImages.size} Image${if (state.selectedImages.size == 1) "" else "s"}",
         onClick = viewModel::compressSelectedImages,
       )

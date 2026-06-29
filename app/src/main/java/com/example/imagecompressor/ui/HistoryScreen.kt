@@ -103,20 +103,20 @@ fun HistoryCard(item: CompressionHistoryEntity, onDelete: () -> Unit, onShare: (
         )
       }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-      StatCard(
-        "Before",
-        item.originalSizeBytes.toReadableSize(),
-        FigmaUi.SurfaceSoft,
-        Modifier.weight(1f)
-      )
-      StatCard(
-        "After",
-        item.compressedSizeBytes.toReadableSize(),
-        FigmaUi.Green,
-        Modifier.weight(1f)
-      )
-    }
+//    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+//      StatCard(
+//        "Before",
+//        item.originalSizeBytes.toReadableSize(),
+//        FigmaUi.SurfaceSoft,
+//        Modifier.weight(1f)
+//      )
+//      StatCard(
+//        "After",
+//        item.compressedSizeBytes.toReadableSize(),
+//        FigmaUi.Green,
+//        Modifier.weight(1f)
+//      )
+//    }
     Text(
       "${item.width} x ${item.height} • ${item.outputFormat}",
       color = FigmaUi.Body,

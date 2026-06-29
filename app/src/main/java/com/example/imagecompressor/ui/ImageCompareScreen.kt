@@ -32,7 +32,7 @@ import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.EmptyState
 import com.example.imagecompressor.ui.components.FigmaCard
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
+import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.StatCard
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
@@ -97,22 +97,22 @@ fun ImageCompareScreen(
       }
     }
 
-    item {
-      Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        StatCard(
-          "Before",
-          image.original.sizeBytes.toReadableSize(),
-          FigmaUi.SurfaceSoft,
-          Modifier.weight(1f)
-        )
-        StatCard(
-          "After",
-          image.compressedSizeBytes.toReadableSize(),
-          FigmaUi.Green,
-          Modifier.weight(1f)
-        )
-      }
-    }
+//    item {
+//      Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+//        StatCard(
+//          "Before",
+//          image.original.sizeBytes.toReadableSize(),
+//          FigmaUi.SurfaceSoft,
+//          Modifier.weight(1f)
+//        )
+//        StatCard(
+//          "After",
+//          image.compressedSizeBytes.toReadableSize(),
+//          FigmaUi.Green,
+//          Modifier.weight(1f)
+//        )
+//      }
+//    }
 
     item {
       FigmaCard {
@@ -142,7 +142,7 @@ fun ImageCompareScreen(
 
     item {
       Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FigmaPrimaryButton(
+        PrimaryButton(
           text = if (image.savedUri == null) "Save to Gallery" else "Saved",
           onClick = { onSave(image) },
           enabled = image.savedUri == null,

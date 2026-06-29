@@ -33,7 +33,7 @@ import com.example.imagecompressor.data.model.SelectedImage
 import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.EmptyState
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
+import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.LoadingCard
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
@@ -93,7 +93,7 @@ fun PreviewScreen(
           SelectedImageCard(image = image, onRemove = { onRemove(image) })
         }
       }
-      FigmaPrimaryButton(
+      PrimaryButton(
         text = "Choose Compression Settings",
         onClick = onContinue,
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),

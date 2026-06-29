@@ -39,7 +39,7 @@ import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.EmptyState
 import com.example.imagecompressor.ui.components.FigmaCard
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
+import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.components.StatCard
@@ -169,7 +169,7 @@ fun ResultsScreen(
 
         item {
           Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
-            FigmaPrimaryButton(
+            PrimaryButton(
               text = if (state.isSaving) "Saving..." else "Save to Gallery",
               onClick = onSaveAll,
               enabled = !state.isSaving
@@ -320,20 +320,20 @@ fun CompressionProgressScreen(state: ImageCompressorUiState, modifier: Modifier 
         overflow = TextOverflow.Ellipsis,
       )
       Spacer(Modifier.height(32.dp))
-      Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        StatCard(
-          label = "Completed",
-          value = "${state.progress.completed}/${state.progress.total}",
-          tone = FigmaUi.Green,
-          modifier = Modifier.weight(1f),
-        )
-        StatCard(
-          label = "Status",
-          value = "~working",
-          tone = FigmaUi.SurfaceSoft,
-          modifier = Modifier.weight(1f),
-        )
-      }
+//      Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+//        StatCard(
+//          label = "Completed",
+//          value = "${state.progress.completed}/${state.progress.total}",
+//          tone = FigmaUi.Green,
+//          modifier = Modifier.weight(1f),
+//        )
+//        StatCard(
+//          label = "Status",
+//          value = "~working",
+//          tone = FigmaUi.SurfaceSoft,
+//          modifier = Modifier.weight(1f),
+//        )
+//      }
     }
     Box(
       modifier =
