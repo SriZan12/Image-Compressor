@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -191,9 +190,7 @@ private fun ImageCompressorApp(
             when (state.screen) {
                 AppScreen.ONBOARDING ->
                     OnboardingScreen(
-                        modifier = Modifier
-                            .padding(padding)
-                            .navigationBarsPadding(),
+                        modifier = Modifier,
                         onContinue = viewModel::completeOnboarding
                     )
 
