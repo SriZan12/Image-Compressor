@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -16,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.data.model.ThemePreference
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.FigmaChip
 import com.example.imagecompressor.ui.components.OutlinedPillButton
@@ -31,7 +31,7 @@ fun SettingsScreen(
     onClearHistory: () -> Unit,
 ) {
   LazyColumn(
-    modifier = modifier.fillMaxSize().background(FigmaUi.Background),
+    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
@@ -39,14 +39,14 @@ fun SettingsScreen(
       FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
         Text(
           "Appearance",
-          color = FigmaUi.Ink,
+          color = MaterialTheme.colorScheme.onSurface,
           fontSize = 22.sp,
           lineHeight = 28.sp,
           fontWeight = FontWeight.Bold
         )
         Text(
           "Choose how the interface should look.",
-          color = FigmaUi.Body,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
           fontSize = 14.sp,
           lineHeight = 20.sp
         )
@@ -68,14 +68,14 @@ fun SettingsScreen(
         PrivacyBadge(text = "Privacy First", compact = true)
         Text(
           "Images are compressed locally on your device.",
-          color = FigmaUi.Ink,
+          color = MaterialTheme.colorScheme.onSurface,
           fontSize = 18.sp,
           lineHeight = 24.sp,
           fontWeight = FontWeight.Bold
         )
         Text(
           "The app does not upload your photos to a server.",
-          color = FigmaUi.Body,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
           fontSize = 14.sp,
           lineHeight = 20.sp
         )
@@ -85,14 +85,14 @@ fun SettingsScreen(
       FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
         Text(
           "History",
-          color = FigmaUi.Ink,
+          color = MaterialTheme.colorScheme.onSurface,
           fontSize = 22.sp,
           lineHeight = 28.sp,
           fontWeight = FontWeight.Bold
         )
         Text(
           "${state.history.size} compression record${if (state.history.size == 1) "" else "s"}",
-          color = FigmaUi.Body,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
           fontSize = 14.sp,
           lineHeight = 20.sp
         )

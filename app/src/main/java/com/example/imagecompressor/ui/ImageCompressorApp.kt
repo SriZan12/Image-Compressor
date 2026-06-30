@@ -55,7 +55,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.ThemePreference
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
 import com.example.imagecompressor.ui.components.toMimeType
 import com.example.imagecompressor.ui.splash.SplashScreen
@@ -104,10 +103,7 @@ private fun ImageCompressorApp(
         rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
             viewModel.addSelectedImages(uris)
         }
-    val singlePicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            uri?.let { viewModel.addSelectedImages(listOf(it)) }
-        }
+
     var pendingSaveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -146,7 +142,7 @@ private fun ImageCompressorApp(
     }
 
     Scaffold(
-        containerColor = FigmaUi.Background,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (state.screen != AppScreen.ONBOARDING) {
                 AppTopBar(
@@ -301,11 +297,11 @@ private fun AppTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = FigmaUi.Background,
+            containerColor = MaterialTheme.colorScheme.background,
             scrolledContainerColor = Color.Unspecified,
-            navigationIconContentColor = FigmaUi.Primary,
-            titleContentColor = FigmaUi.Ink,
-            actionIconContentColor = FigmaUi.Primary
+            navigationIconContentColor = MaterialTheme.colorScheme.primary,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.primary
         )
     )
 }
@@ -376,11 +372,11 @@ private fun RowScope.AppBottomBarItem(
             )
         },
         colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = FigmaUi.GreenText,
-            selectedTextColor = FigmaUi.GreenText,
-            indicatorColor = FigmaUi.Green,
-            unselectedIconColor = FigmaUi.Body,
-            unselectedTextColor = FigmaUi.Body
+            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     )
 }

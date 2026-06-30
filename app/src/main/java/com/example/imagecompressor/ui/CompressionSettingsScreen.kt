@@ -19,12 +19,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -43,7 +44,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.ResizeMode
 import com.example.imagecompressor.data.model.OutputFormat
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.BottomActionBar
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.FigmaChip
@@ -52,8 +52,6 @@ import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.components.roundToStep
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
-
-private val SectionDivider = Color(0xFFD8569A) // matches the small pink divider tick in the design
 
 @Composable
 fun CompressionSettingsScreen(
@@ -66,7 +64,7 @@ fun CompressionSettingsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(FigmaUi.Background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -161,16 +159,16 @@ private fun CompressionSettingsTopBar(onBack: () -> Unit) {
     ) {
         IconButton(onClick = onBack) {
             Icon(
-                imageVector = Icons.Rounded.ArrowBack,
+                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                 contentDescription = "Back",
-                tint = FigmaUi.Ink,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp),
             )
         }
 
         Text(
             text = "Compression Settings",
-            color = FigmaUi.Ink,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
@@ -180,7 +178,7 @@ private fun CompressionSettingsTopBar(onBack: () -> Unit) {
         Icon(
             imageVector = Icons.Rounded.Shield,
             contentDescription = "Privacy",
-            tint = FigmaUi.Primary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp),
         )
     }
@@ -200,8 +198,12 @@ private fun SelectedImagesPreviewRow(images: List<com.example.imagecompressor.da
                     .weight(1f)
                     .height(84.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(FigmaUi.Surface)
-                    .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        RoundedCornerShape(12.dp)
+                    ),
                 contentScale = ContentScale.Crop,
             )
         }
@@ -213,7 +215,7 @@ private fun SelectedImagesPreviewRow(images: List<com.example.imagecompressor.da
                     .weight(1f)
                     .height(84.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(FigmaUi.Surface),
+                    .background(MaterialTheme.colorScheme.surfaceContainer),
             )
         }
 
@@ -223,11 +225,20 @@ private fun SelectedImagesPreviewRow(images: List<com.example.imagecompressor.da
                     .weight(1f)
                     .height(84.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFE6E8EE))
-                    .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                        RoundedCornerShape(12.dp)
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+$remaining", color = FigmaUi.Body, fontSize = 16.sp, lineHeight = 24.sp)
+                Text(
+                    "+$remaining",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp
+                )
             }
         }
     }
@@ -235,13 +246,12 @@ private fun SelectedImagesPreviewRow(images: List<com.example.imagecompressor.da
 
 @Composable
 private fun SectionTick() {
-    // The thin pink divider mark used between sections in the design
     Box(
         modifier = Modifier
             .width(32.dp)
             .height(2.dp)
             .clip(RoundedCornerShape(1.dp))
-            .background(SectionDivider),
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
     )
 }
 
@@ -258,14 +268,14 @@ private fun QualitySection(
         ) {
             Text(
                 "Quality",
-                color = FigmaUi.Ink,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 16.sp,
                 lineHeight = 24.sp,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 "$quality%",
-                color = FigmaUi.Primary,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 22.sp,
                 lineHeight = 28.sp,
                 fontWeight = FontWeight.Bold
@@ -278,9 +288,9 @@ private fun QualitySection(
             valueRange = 10f..100f,
             steps = 8,
             colors = SliderDefaults.colors(
-                thumbColor = FigmaUi.Primary,
-                activeTrackColor = FigmaUi.Primary,
-                inactiveTrackColor = Color(0xFFE1E2E8),
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
             ),
         )
 
@@ -312,7 +322,7 @@ private fun ResizeSection(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             "Resize (Optional)",
-            color = FigmaUi.Ink,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 16.sp,
             lineHeight = 24.sp,
             fontWeight = FontWeight.Medium
@@ -352,7 +362,7 @@ private fun ResizeSection(
                 Icon(
                     imageVector = Icons.Rounded.Link,
                     contentDescription = "Keep dimensions linked",
-                    tint = FigmaUi.Body,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -378,7 +388,7 @@ private fun OutputFormatSection(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(
             "Output Format",
-            color = FigmaUi.Ink,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 16.sp,
             lineHeight = 24.sp,
             fontWeight = FontWeight.Medium
@@ -388,7 +398,7 @@ private fun OutputFormatSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
-                .background(FigmaUi.Surface)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
                 .padding(4.dp),
         ) {
             OutputFormat.entries.forEach { format ->
@@ -398,13 +408,20 @@ private fun OutputFormatSection(
                         .weight(1f)
                         .height(48.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(if (selected) Color.White else Color.Transparent)
+                        .background(
+                            if (selected) MaterialTheme.colorScheme.surface
+                            else Color.Transparent
+                        )
                         .clickable { onFormatSelected(format) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         format.label,
-                        color = if (selected) FigmaUi.Ink else FigmaUi.Body,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                         fontWeight = FontWeight.Medium,
@@ -433,20 +450,20 @@ private fun StripMetadataCard(
                 Icon(
                     imageVector = Icons.Rounded.Tune,
                     contentDescription = null,
-                    tint = FigmaUi.Body,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         "Strip Metadata",
-                        color = FigmaUi.Ink,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 16.sp,
                         lineHeight = 24.sp,
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
                         "Location, camera info, etc.",
-                        color = FigmaUi.Body,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                     )
@@ -457,9 +474,9 @@ private fun StripMetadataCard(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = FigmaUi.Primary,
-                    uncheckedTrackColor = FigmaUi.Border,
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
                 ),
             )
         }

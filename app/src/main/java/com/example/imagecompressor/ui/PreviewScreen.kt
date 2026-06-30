@@ -26,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -41,7 +42,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.SelectedImage
 import com.example.imagecompressor.data.model.toReadableSize
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
 import com.example.imagecompressor.ui.components.EmptyState
 import com.example.imagecompressor.ui.components.LoadingCard
@@ -130,11 +130,11 @@ fun SelectedImageCard(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(
-                containerColor = FigmaUi.SurfaceSoft
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
             border = BorderStroke(
                 width = 1.dp,
-                color = FigmaUi.Border.copy(alpha = 0.35f)
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             ),
         ) {
             Column {
@@ -153,7 +153,7 @@ fun SelectedImageCard(
                                     topEnd = 12.dp
                                 )
                             )
-                            .background(FigmaUi.Surface),
+                            .background(MaterialTheme.colorScheme.surfaceContainer),
                         contentScale = ContentScale.Crop,
                     )
 
@@ -164,7 +164,7 @@ fun SelectedImageCard(
                             .padding(all = 6.dp)
                             .align(Alignment.TopEnd),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = Color.White.copy(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(
                                 0.9f
                             )
                         )
@@ -173,7 +173,7 @@ fun SelectedImageCard(
                             imageVector = Icons.Rounded.Close,
                             contentDescription = "Remove image",
                             modifier = Modifier.padding(all = 2.dp),
-                            tint = Color.Black
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -186,7 +186,7 @@ fun SelectedImageCard(
                             .align(Alignment.BottomEnd)
                             .padding(10.dp)
                             .clip(RoundedCornerShape(99.dp))
-                            .background(FigmaUi.Primary)
+                            .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
@@ -203,7 +203,7 @@ fun SelectedImageCard(
                         text = image.displayName,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = FigmaUi.Ink,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 16.sp,
                         lineHeight = 22.sp,
                         fontWeight = FontWeight.Medium
@@ -211,7 +211,7 @@ fun SelectedImageCard(
 
                     Text(
                         text = "${image.width}×${image.height}",
-                        color = FigmaUi.Body,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                         letterSpacing = 0.25.sp
@@ -233,7 +233,7 @@ private fun AddMoreImageCard(
             .clip(RoundedCornerShape(12.dp))
             .border(
                 width = 2.dp,
-                color = FigmaUi.Border,
+                color = MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick),
@@ -247,20 +247,20 @@ private fun AddMoreImageCard(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(CircleShape)
-                    .background(FigmaUi.Green),
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
                     contentDescription = null,
-                    tint = FigmaUi.GreenText,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(32.dp)
                 )
             }
 
             Text(
                 text = "Add More",
-                color = FigmaUi.Body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 18.sp,
                 lineHeight = 24.sp,
                 fontWeight = FontWeight.Medium

@@ -22,7 +22,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -42,7 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.OutputFormat
-import com.example.imagecompressor.theme.FigmaUi
+import com.example.imagecompressor.theme.greenBackground
+import com.example.imagecompressor.theme.greenText
 
 @Composable
 fun FigmaCard(
@@ -54,8 +54,8 @@ fun FigmaCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = FigmaUi.SurfaceSoft),
-        border = BorderStroke(1.dp, FigmaUi.Border.copy(alpha = 0.25f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
@@ -85,7 +85,7 @@ fun PrimaryButton(
         colors =
             ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
         elevation = ButtonDefaults.buttonElevation(
             defaultElevation = 10.dp,
@@ -114,10 +114,10 @@ fun OutlinedPillButton(
         modifier =
             modifier
                 .clip(RoundedCornerShape(9999.dp))
-                .background(FigmaUi.Background)
+                .background(MaterialTheme.colorScheme.background)
                 .border(
                     1.dp,
-                    if (enabled) FigmaUi.Muted else FigmaUi.Border,
+                    if (enabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
                     RoundedCornerShape(9999.dp)
                 )
                 .clickable(enabled = enabled, onClick = onClick)
@@ -128,7 +128,7 @@ fun OutlinedPillButton(
         if (leading != null) {
             Text(
                 leading,
-                color = if (enabled) FigmaUi.Primary else FigmaUi.Muted,
+                color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 fontSize = 18.sp,
                 lineHeight = 20.sp
             )
@@ -136,7 +136,7 @@ fun OutlinedPillButton(
         }
         Text(
             text,
-            color = if (enabled) FigmaUi.Primary else FigmaUi.Muted,
+            color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             fontWeight = FontWeight.Bold,
@@ -151,10 +151,13 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
         modifier =
             Modifier
                 .clip(RoundedCornerShape(9999.dp))
-                .background(if (selected) FigmaUi.Green else FigmaUi.Background)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.background
+                )
                 .border(
                     1.dp,
-                    if (selected) Color.Transparent else FigmaUi.Border,
+                    if (selected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
                     RoundedCornerShape(9999.dp)
                 )
                 .clickable(onClick = onClick)
@@ -163,7 +166,7 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text,
-            color = if (selected) FigmaUi.GreenText else FigmaUi.Body,
+            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             fontWeight = FontWeight.Medium,
@@ -183,19 +186,25 @@ fun FigmaTextField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        placeholder = { Text(placeholder, color = FigmaUi.Muted, fontSize = 16.sp) },
+        placeholder = {
+            Text(
+                placeholder,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 16.sp
+            )
+        },
         modifier = modifier.height(56.dp),
-        label = { Text(label, color = FigmaUi.Primary, fontSize = 11.sp) },
+        label = { Text(label, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp) },
         singleLine = true,
         shape = RoundedCornerShape(8.dp),
-        textStyle = TextStyle(color = FigmaUi.Body, fontSize = 16.sp),
+        textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
         colors =
             OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = FigmaUi.Muted,
-                unfocusedBorderColor = FigmaUi.Muted,
-                cursorColor = FigmaUi.Primary,
-                focusedContainerColor = FigmaUi.Background,
-                unfocusedContainerColor = FigmaUi.Background,
+                focusedBorderColor = MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary,
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
             ),
     )
 }
@@ -207,8 +216,14 @@ fun PrivacyBadge(text: String, modifier: Modifier = Modifier, compact: Boolean =
             modifier =
                 Modifier
                     .clip(RoundedCornerShape(9999.dp))
-                    .background(if (compact) FigmaUi.Green else FigmaUi.Green.copy(alpha = 0.65f))
-                    .border(1.dp, FigmaUi.GreenText.copy(alpha = 0.1f), RoundedCornerShape(9999.dp))
+                    .background(
+                        greenBackground
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.1f),
+                        RoundedCornerShape(9999.dp)
+                    )
                     .padding(
                         horizontal = if (compact) 12.dp else 16.dp,
                         vertical = if (compact) 4.dp else 8.dp
@@ -225,7 +240,7 @@ fun PrivacyBadge(text: String, modifier: Modifier = Modifier, compact: Boolean =
             )
             Text(
                 text,
-                color = if (compact) FigmaUi.GreenDark else FigmaUi.GreenText,
+                color = greenText,
                 fontSize = if (compact) 14.sp else 14.sp,
                 lineHeight = 20.sp,
                 fontWeight = FontWeight.Medium,
@@ -295,8 +310,8 @@ fun BoxScope.BottomActionBar(content: @Composable () -> Unit) {
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Color.White.copy(alpha = 0.72f))
-                .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
     ) {
         content()

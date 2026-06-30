@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.imagecompressor.R
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
 import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
@@ -117,7 +116,7 @@ fun OnboardingScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         PrimaryButton(
-            text = if (slide == slides.lastIndex) "Get Started  ✓" else "Continue  →",
+            text = if (slide == slides.lastIndex) "Get Started" else "Continue",
             onClick = {
                 if (slide == slides.lastIndex) {
                     onContinue()
@@ -216,7 +215,11 @@ private fun OnboardingIndicator(
                     .width(if (index == selectedIndex) 32.dp else 8.dp)
                     .clip(RoundedCornerShape(9999.dp))
                     .background(
-                        if (index == selectedIndex) FigmaUi.Primary else FigmaUi.Border
+                        if (index == selectedIndex) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        }
                     )
             )
         }

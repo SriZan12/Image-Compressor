@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.CompressedImage
 import com.example.imagecompressor.data.model.toReadableSize
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.EmptyState
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.PrimaryButton
@@ -55,7 +54,7 @@ fun ImageCompareScreen(
   }
 
   LazyColumn(
-    modifier = modifier.fillMaxSize().background(FigmaUi.Background),
+    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
@@ -63,7 +62,7 @@ fun ImageCompareScreen(
       FigmaCard(shape = RoundedCornerShape(28.dp), padding = 20.dp) {
         Text(
           image.original.displayName,
-          color = FigmaUi.Ink,
+          color = MaterialTheme.colorScheme.onSurface,
           fontSize = 22.sp,
           lineHeight = 28.sp,
           fontWeight = FontWeight.Bold,
@@ -72,7 +71,7 @@ fun ImageCompareScreen(
         )
         Text(
           "${image.reductionPercent}% smaller • ${image.format.label}",
-          color = FigmaUi.Primary,
+          color = MaterialTheme.colorScheme.primary,
           fontSize = 16.sp,
           lineHeight = 24.sp,
           fontWeight = FontWeight.Medium,
@@ -96,42 +95,24 @@ fun ImageCompareScreen(
         )
       }
     }
-
-//    item {
-//      Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-//        StatCard(
-//          "Before",
-//          image.original.sizeBytes.toReadableSize(),
-//          FigmaUi.SurfaceSoft,
-//          Modifier.weight(1f)
-//        )
-//        StatCard(
-//          "After",
-//          image.compressedSizeBytes.toReadableSize(),
-//          FigmaUi.Green,
-//          Modifier.weight(1f)
-//        )
-//      }
-//    }
-
     item {
       FigmaCard {
         Text(
           "Output Details",
-          color = FigmaUi.Ink,
+          color = MaterialTheme.colorScheme.onSurface,
           fontSize = 16.sp,
           lineHeight = 24.sp,
           fontWeight = FontWeight.Medium
         )
         Text(
           "${image.width} x ${image.height}",
-          color = FigmaUi.Body,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
           fontSize = 14.sp,
           lineHeight = 20.sp
         )
         Text(
           image.outputFilePath,
-          color = FigmaUi.Muted,
+          color = MaterialTheme.colorScheme.outline,
           fontSize = 12.sp,
           lineHeight = 16.sp,
           maxLines = 2,
@@ -167,8 +148,12 @@ fun ComparisonPanel(label: String, model: Any, size: String, modifier: Modifier 
           .fillMaxWidth()
           .aspectRatio(0.78f)
           .clip(RoundedCornerShape(16.dp))
-          .background(FigmaUi.Surface)
-          .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f), RoundedCornerShape(16.dp)),
+          .background(MaterialTheme.colorScheme.surfaceContainer)
+          .border(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+            RoundedCornerShape(16.dp)
+          ),
     ) {
       AsyncImage(model = model, contentDescription = label, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
       Box(
@@ -177,13 +162,27 @@ fun ComparisonPanel(label: String, model: Any, size: String, modifier: Modifier 
             .align(Alignment.TopStart)
             .padding(8.dp)
             .clip(RoundedCornerShape(9999.dp))
-            .background(FigmaUi.Ink.copy(alpha = 0.82f))
+            .background(MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.82f))
             .padding(horizontal = 10.dp, vertical = 4.dp),
       ) {
-        Text(label, color = FigmaUi.Background, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+        Text(
+          label,
+          color = MaterialTheme.colorScheme.inverseOnSurface,
+          fontSize = 11.sp,
+          lineHeight = 16.sp,
+          fontWeight = FontWeight.Medium
+        )
       }
     }
-    Text(size, color = FigmaUi.Ink, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    Text(
+      size,
+      color = MaterialTheme.colorScheme.onSurface,
+      fontSize = 16.sp,
+      lineHeight = 24.sp,
+      fontWeight = FontWeight.Bold,
+      textAlign = TextAlign.Center,
+      modifier = Modifier.fillMaxWidth()
+    )
   }
 }
 

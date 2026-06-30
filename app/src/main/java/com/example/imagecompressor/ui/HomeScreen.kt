@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.toReadableSize
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.PrimaryButton
@@ -194,7 +193,7 @@ private fun SelectImagesCard(
             .fillMaxWidth()
             .heightIn(min = 150.dp, max = 180.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(FigmaUi.Primary)
+            .background(MaterialTheme.colorScheme.primary)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -237,7 +236,7 @@ private fun SelectedImagesCard(
     FigmaCard {
         Text(
             text = "$count image${if (count == 1) "" else "s"} ready",
-            color = FigmaUi.Ink,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 22.sp,
             lineHeight = 28.sp,
             fontWeight = FontWeight.Bold,
@@ -245,7 +244,7 @@ private fun SelectedImagesCard(
 
         Text(
             text = "Your previous selection is waiting. Review it or choose a fresh batch.",
-            color = FigmaUi.Body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             lineHeight = 20.sp,
         )
@@ -269,7 +268,7 @@ private fun EmptyHomeState() {
             modifier = Modifier
                 .size(156.dp)
                 .clip(CircleShape)
-                .background(FigmaUi.SurfaceSoft),
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
             contentAlignment = Alignment.Center,
         ) {
             Image(
@@ -286,7 +285,7 @@ private fun EmptyHomeState() {
 
         Text(
             text = "No images yet",
-            color = FigmaUi.Ink,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 22.sp,
             lineHeight = 28.sp,
             fontWeight = FontWeight.Medium
@@ -294,7 +293,7 @@ private fun EmptyHomeState() {
 
         Text(
             text = "Start by selecting some from your gallery.",
-            color = FigmaUi.Body,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             letterSpacing = 0.25.sp,
