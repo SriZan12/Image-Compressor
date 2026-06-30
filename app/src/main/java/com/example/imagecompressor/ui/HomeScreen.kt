@@ -63,7 +63,9 @@ fun HomeScreen(
     val savedLabel = if (savedBytes == 0L) "0 MB" else savedBytes.toReadableSize()
 
     Box(
-        modifier = modifier.fillMaxSize().background(color = MaterialTheme.colorScheme.surface),
+        modifier = modifier
+            .fillMaxSize()
+            .background(color = MaterialTheme.colorScheme.surface),
     ) {
         LazyColumn(
             modifier = Modifier

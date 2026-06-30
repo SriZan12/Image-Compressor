@@ -25,13 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.data.local.CompressionHistoryEntity
 import com.example.imagecompressor.data.model.calculateReductionPercent
-import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.ui.components.EmptyState
 import com.example.imagecompressor.ui.components.FigmaCard
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
-import com.example.imagecompressor.ui.components.StatCard
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 import java.text.DateFormat
 import java.util.Date

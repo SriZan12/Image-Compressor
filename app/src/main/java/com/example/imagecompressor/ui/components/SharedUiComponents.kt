@@ -176,12 +176,14 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
 fun FigmaTextField(
     value: String,
     label: String,
+    placeholder: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
+        placeholder = { Text(placeholder, color = FigmaUi.Muted, fontSize = 16.sp) },
         modifier = modifier.height(56.dp),
         label = { Text(label, color = FigmaUi.Primary, fontSize = 11.sp) },
         singleLine = true,
