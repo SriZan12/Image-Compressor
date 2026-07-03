@@ -45,7 +45,7 @@ import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.ResizeMode
 import com.example.imagecompressor.data.model.OutputFormat
 import com.example.imagecompressor.ui.components.BottomActionBar
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.FigmaChip
 import com.example.imagecompressor.ui.components.FigmaTextField
 import com.example.imagecompressor.ui.components.PrimaryButton
@@ -64,7 +64,7 @@ fun CompressionSettingsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -251,7 +251,7 @@ private fun SectionTick() {
             .width(32.dp)
             .height(2.dp)
             .clip(RoundedCornerShape(1.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+            .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f)),
     )
 }
 
@@ -437,7 +437,7 @@ private fun StripMetadataCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    FigmaCard(shape = RoundedCornerShape(20.dp), padding = 20.dp) {
+    CommonCard(shape = RoundedCornerShape(20.dp), padding = 20.dp) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,

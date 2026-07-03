@@ -30,10 +30,9 @@ import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.CompressedImage
 import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.ui.components.EmptyState
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.OutlinedPillButton
-import com.example.imagecompressor.ui.components.StatCard
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 
 @Composable
@@ -54,12 +53,12 @@ fun ImageCompareScreen(
   }
 
   LazyColumn(
-    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest),
     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 20.dp) {
+      CommonCard(shape = RoundedCornerShape(28.dp), padding = 20.dp) {
         Text(
           image.original.displayName,
           color = MaterialTheme.colorScheme.onSurface,
@@ -96,7 +95,7 @@ fun ImageCompareScreen(
       }
     }
     item {
-      FigmaCard {
+      CommonCard {
         Text(
           "Output Details",
           color = MaterialTheme.colorScheme.onSurface,

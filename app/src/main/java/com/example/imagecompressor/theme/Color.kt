@@ -217,8 +217,9 @@ val surfaceContainerLowDarkHighContrast = Color(0xFF1D2024)
 val surfaceContainerDarkHighContrast = Color(0xFF2E3036)
 val surfaceContainerHighDarkHighContrast = Color(0xFF393B41)
 val surfaceContainerHighestDarkHighContrast = Color(0xFF45474C)
-val greenBackground = Color(0xFFCFE5D2)
-val greenText = Color(0xFF717782)
+val greenBackground = Color(0xFFDDF1E2)
+val greenText = Color(0xFF3F5E47)
+val greenDark = Color(0xFF23412A)
 
 object FigmaUi {
     val Background = Color(0xFFF8F9FF)

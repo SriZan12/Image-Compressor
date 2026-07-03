@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.data.local.CompressionHistoryEntity
 import com.example.imagecompressor.data.model.calculateReductionPercent
+import com.example.imagecompressor.theme.greenBackground
+import com.example.imagecompressor.theme.greenDark
 import com.example.imagecompressor.ui.components.EmptyState
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
@@ -45,12 +47,12 @@ fun HistoryScreen(
     EmptyState(
       title = "No compression history",
       body = "Compressed images will appear here with their saved location.",
-      modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+      modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest),
     )
     return
   }
   LazyColumn(
-    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
@@ -66,7 +68,7 @@ fun HistoryScreen(
 @Composable
 fun HistoryCard(item: CompressionHistoryEntity, onDelete: () -> Unit, onShare: () -> Unit) {
   val reduction = calculateReductionPercent(item.originalSizeBytes, item.compressedSizeBytes)
-  FigmaCard(shape = RoundedCornerShape(12.dp), padding = 16.dp) {
+  CommonCard(shape = RoundedCornerShape(12.dp), padding = 16.dp) {
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceBetween,
@@ -91,12 +93,12 @@ fun HistoryCard(item: CompressionHistoryEntity, onDelete: () -> Unit, onShare: (
       Box(
         modifier = Modifier
           .clip(RoundedCornerShape(9999.dp))
-          .background(MaterialTheme.colorScheme.secondaryContainer)
+          .background(greenBackground)
           .padding(horizontal = 10.dp, vertical = 4.dp)
       ) {
         Text(
           "$reduction%",
-          color = MaterialTheme.colorScheme.onSecondaryContainer,
+          color = greenDark,
           fontSize = 12.sp,
           lineHeight = 16.sp,
           fontWeight = FontWeight.Medium

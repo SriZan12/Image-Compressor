@@ -26,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,12 +36,13 @@ import coil.compose.AsyncImage
 import com.example.imagecompressor.data.model.CompressedImage
 import com.example.imagecompressor.data.model.calculateReductionPercent
 import com.example.imagecompressor.data.model.toReadableSize
+import com.example.imagecompressor.theme.greenBackground
+import com.example.imagecompressor.theme.greenDark
 import com.example.imagecompressor.ui.components.EmptyState
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
-import com.example.imagecompressor.ui.components.StatCard
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 import kotlin.math.roundToInt
 
@@ -66,7 +66,7 @@ fun ResultsScreen(
   val totalAfter = state.compressedImages.sumOf { it.compressedSizeBytes }
   val reduction = calculateReductionPercent(totalBefore, totalAfter)
 
-  Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+  Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest)) {
     if (state.compressedImages.isEmpty()) {
       EmptyState(
         title = "No results yet",
@@ -85,12 +85,12 @@ fun ResultsScreen(
               modifier = Modifier
                 .size(64.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .background(greenBackground),
               contentAlignment = Alignment.Center,
             ) {
               Text(
                 "✓",
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = greenDark,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold
               )
@@ -109,7 +109,7 @@ fun ResultsScreen(
         }
 
         item {
-          FigmaCard(shape = RoundedCornerShape(12.dp), padding = 24.dp) {
+          CommonCard(shape = RoundedCornerShape(12.dp), padding = 24.dp) {
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,7 +239,7 @@ fun ResultsScreen(
 
 @Composable
 fun ResultCard(image: CompressedImage, onSave: () -> Unit, onShare: () -> Unit, onCompare: () -> Unit) {
-  FigmaCard(shape = RoundedCornerShape(12.dp), padding = 12.dp) {
+  CommonCard(shape = RoundedCornerShape(12.dp), padding = 12.dp) {
     Row(
       horizontalArrangement = Arrangement.spacedBy(12.dp),
       verticalAlignment = Alignment.CenterVertically
@@ -318,7 +318,7 @@ fun CompressionProgressScreen(state: ImageCompressorUiState, modifier: Modifier 
   val currentCount = state.progress.completed.coerceIn(0, state.progress.total)
   val current = state.selectedImages.getOrNull(currentIndex)
 
-  Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+  Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest)) {
     Box(
       modifier =
         Modifier

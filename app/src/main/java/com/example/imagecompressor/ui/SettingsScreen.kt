@@ -17,7 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.data.model.ThemePreference
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.FigmaChip
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
@@ -31,12 +31,12 @@ fun SettingsScreen(
     onClearHistory: () -> Unit,
 ) {
   LazyColumn(
-    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+    modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerLowest),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
     item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
+      CommonCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
         Text(
           "Appearance",
           color = MaterialTheme.colorScheme.onSurface,
@@ -64,7 +64,7 @@ fun SettingsScreen(
       }
     }
     item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
+      CommonCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
         PrivacyBadge(text = "Privacy First", compact = true)
         Text(
           "Images are compressed locally on your device.",
@@ -82,7 +82,7 @@ fun SettingsScreen(
       }
     }
     item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
+      CommonCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
         Text(
           "History",
           color = MaterialTheme.colorScheme.onSurface,

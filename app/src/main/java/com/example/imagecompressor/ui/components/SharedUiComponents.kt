@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,21 +43,23 @@ import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.OutputFormat
 import com.example.imagecompressor.theme.greenBackground
+import com.example.imagecompressor.theme.greenDark
 import com.example.imagecompressor.theme.greenText
 
 @Composable
-fun FigmaCard(
+fun CommonCard(
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(12.dp),
     padding: Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val elevatedSurface = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        colors = CardDefaults.cardColors(containerColor = elevatedSurface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
     ) {
         Column(
             modifier = Modifier
@@ -114,10 +117,10 @@ fun OutlinedPillButton(
         modifier =
             modifier
                 .clip(RoundedCornerShape(9999.dp))
-                .background(MaterialTheme.colorScheme.background)
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .border(
                     1.dp,
-                    if (enabled) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant,
+                    if (enabled) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
                     RoundedCornerShape(9999.dp)
                 )
                 .clickable(enabled = enabled, onClick = onClick)
@@ -152,12 +155,13 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
             Modifier
                 .clip(RoundedCornerShape(9999.dp))
                 .background(
-                    if (selected) MaterialTheme.colorScheme.secondaryContainer
-                    else MaterialTheme.colorScheme.background
+                    if (selected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerLowest
                 )
                 .border(
                     1.dp,
-                    if (selected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant,
+                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    else MaterialTheme.colorScheme.outlineVariant,
                     RoundedCornerShape(9999.dp)
                 )
                 .clickable(onClick = onClick)
@@ -166,7 +170,7 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text,
-            color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             fontWeight = FontWeight.Medium,
@@ -200,11 +204,11 @@ fun FigmaTextField(
         textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
         colors =
             OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.outline,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                 cursorColor = MaterialTheme.colorScheme.primary,
-                focusedContainerColor = MaterialTheme.colorScheme.background,
-                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
             ),
     )
 }
@@ -221,7 +225,7 @@ fun PrivacyBadge(text: String, modifier: Modifier = Modifier, compact: Boolean =
                     )
                     .border(
                         1.dp,
-                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.1f),
+                        greenText.copy(alpha = 0.18f),
                         RoundedCornerShape(9999.dp)
                     )
                     .padding(
@@ -240,7 +244,7 @@ fun PrivacyBadge(text: String, modifier: Modifier = Modifier, compact: Boolean =
             )
             Text(
                 text,
-                color = greenText,
+                color = if (compact) greenDark else greenText,
                 fontSize = if (compact) 14.sp else 14.sp,
                 lineHeight = 20.sp,
                 fontWeight = FontWeight.Medium,
@@ -305,13 +309,14 @@ fun StatCard(
 
 @Composable
 fun BoxScope.BottomActionBar(content: @Composable () -> Unit) {
+    val actionSurface = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
     Box(
         modifier =
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                .background(actionSurface.copy(alpha = 0.97f))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
     ) {
         content()
@@ -320,16 +325,25 @@ fun BoxScope.BottomActionBar(content: @Composable () -> Unit) {
 
 @Composable
 fun SectionCard(content: @Composable ColumnScope.() -> Unit) {
-    FigmaCard(content = content)
+    CommonCard(content = content)
 }
 
 @Composable
 fun LoadingCard(message: String, progress: Float? = null) {
     SectionCard {
-        Text(message, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            message,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
         if (progress == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         else LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-        Text("This stays on your device.", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "This stays on your device.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -344,8 +358,13 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(body)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
     }
 }

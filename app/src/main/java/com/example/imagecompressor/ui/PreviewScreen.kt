@@ -28,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,13 +111,16 @@ fun SelectedImageScreen(
             }
         }
 
-        PrimaryButton(
-            text = "Continue",
-            onClick = onContinue,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
-        )
+        if (state.selectedImages.isNotEmpty()) {
+            PrimaryButton(
+                text = "Continue",
+                onClick = onContinue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            )
+        }
+
     }
 }
 
@@ -136,6 +140,7 @@ fun SelectedImageCard(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         ) {
             Column {
                 Box(
@@ -164,7 +169,7 @@ fun SelectedImageCard(
                             .padding(all = 6.dp)
                             .align(Alignment.TopEnd),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest.copy(
                                 0.9f
                             )
                         )
@@ -179,14 +184,14 @@ fun SelectedImageCard(
 
                     Text(
                         text = image.sizeBytes.toReadableSize(),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(10.dp)
                             .clip(RoundedCornerShape(99.dp))
-                            .background(MaterialTheme.colorScheme.primary)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
@@ -229,11 +234,12 @@ private fun AddMoreImageCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.78f)
+            .aspectRatio(0.70f)
             .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLowest)
             .border(
                 width = 2.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick),
@@ -247,20 +253,20 @@ private fun AddMoreImageCard(
                 modifier = Modifier
                     .size(64.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(32.dp)
                 )
             }
 
             Text(
                 text = "Add More",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 18.sp,
                 lineHeight = 24.sp,
                 fontWeight = FontWeight.Medium

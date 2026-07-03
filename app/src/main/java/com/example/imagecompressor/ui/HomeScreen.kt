@@ -20,16 +20,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddCircle
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.ImageCompressorTheme
-import com.example.imagecompressor.ui.components.FigmaCard
+import com.example.imagecompressor.ui.components.CommonCard
 import com.example.imagecompressor.ui.components.PrimaryButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.components.StatCard
@@ -64,7 +63,7 @@ fun HomeScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(color = MaterialTheme.colorScheme.surface),
+            .background(color = MaterialTheme.colorScheme.surfaceContainerLowest),
     ) {
         LazyColumn(
             modifier = Modifier
@@ -90,7 +89,7 @@ fun HomeScreen(
                     iconDrawable = R.drawable.space_saved,
                     label = "Space Saved",
                     value = savedLabel,
-                    tone = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tone = MaterialTheme.colorScheme.primaryContainer,
                     labelStyle = MaterialTheme.typography.titleSmall,
                     valueStyle = MaterialTheme.typography.titleLarge,
                 )
@@ -102,7 +101,7 @@ fun HomeScreen(
                     iconDrawable = R.drawable.image_compressed,
                     label = "Images Compressed",
                     value = compressedCount.toString(),
-                    tone = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tone = MaterialTheme.colorScheme.secondaryContainer,
                     labelStyle = MaterialTheme.typography.titleSmall,
                     valueStyle = MaterialTheme.typography.titleLarge,
                 )
@@ -155,10 +154,9 @@ fun CompressionHistoryCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 1.dp, shape = shape)
+            .shadow(elevation = 4.dp, shape = shape)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(border = CardDefaults.outlinedCardBorder(), shape = shape)
+            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -192,11 +190,33 @@ private fun SelectImagesCard(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 150.dp, max = 180.dp)
+            .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.primary)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.inversePrimary.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(12.dp)
+            )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 12.dp, end = 12.dp)
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.08f))
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 18.dp, bottom = 18.dp)
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.inversePrimary.copy(alpha = 0.18f))
+        )
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -204,13 +224,13 @@ private fun SelectImagesCard(
             Icon(
                 imageVector = Icons.Rounded.AddCircle,
                 contentDescription = null,
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(42.dp)
             )
 
             Text(
                 text = "Select Images",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 22.sp,
                 lineHeight = 28.sp,
                 fontWeight = FontWeight.Bold
@@ -218,7 +238,7 @@ private fun SelectImagesCard(
 
             Text(
                 text = "START PROCESSING",
-                color = Color.White.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 fontWeight = FontWeight.Medium,
@@ -233,7 +253,7 @@ private fun SelectedImagesCard(
     count: Int,
     onReviewSelection: () -> Unit
 ) {
-    FigmaCard {
+    CommonCard {
         Text(
             text = "$count image${if (count == 1) "" else "s"} ready",
             color = MaterialTheme.colorScheme.onSurface,
@@ -268,7 +288,7 @@ private fun EmptyHomeState() {
             modifier = Modifier
                 .size(156.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                .background(MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Image(
