@@ -193,7 +193,7 @@ private fun ImageCompressorApp(
                 AppScreen.COMPRESSION_SETTINGS ->
                     CompressionSettingsScreen(
                         state = state,
-                        modifier = Modifier.padding(paddingValues = padding),
+                        modifier = Modifier,
                         viewModel = viewModel,
                     )
 

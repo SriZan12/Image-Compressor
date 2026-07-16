@@ -13,18 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -38,7 +34,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -46,10 +41,9 @@ import com.example.imagecompressor.data.model.ResizeMode
 import com.example.imagecompressor.data.model.OutputFormat
 import com.example.imagecompressor.ui.components.BottomActionBar
 import com.example.imagecompressor.ui.components.CommonCard
-import com.example.imagecompressor.ui.components.FigmaChip
-import com.example.imagecompressor.ui.components.FigmaTextField
+import com.example.imagecompressor.ui.components.CommonChip
+import com.example.imagecompressor.ui.components.CommonTextField
 import com.example.imagecompressor.ui.components.PrimaryButton
-import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.components.roundToStep
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 
@@ -78,9 +72,7 @@ fun CompressionSettingsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                item {
-                    PrivacyBadge(text = "Processed locally on your device")
-                }
+
 
                 item {
                     SelectedImagesPreviewRow(images = state.selectedImages)
@@ -126,15 +118,6 @@ fun CompressionSettingsScreen(
                         onFormatSelected = viewModel::updateOutputFormat,
                     )
                 }
-
-                item { SectionTick() }
-
-                item {
-                    StripMetadataCard(
-                        checked = false,
-                        onCheckedChange = {},
-                    )
-                }
             }
         }
 
@@ -144,43 +127,6 @@ fun CompressionSettingsScreen(
                 onClick = viewModel::compressSelectedImages,
             )
         }
-    }
-}
-
-@Composable
-private fun CompressionSettingsTopBar(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(24.dp),
-            )
-        }
-
-        Text(
-            text = "Compression Settings",
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-
-        Icon(
-            imageVector = Icons.Rounded.Shield,
-            contentDescription = "Privacy",
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp),
-        )
     }
 }
 
@@ -260,7 +206,7 @@ private fun QualitySection(
     quality: Int,
     onQualityChange: (Int) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -269,15 +215,13 @@ private fun QualitySection(
             Text(
                 "Quality",
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 "$quality%",
                 color = MaterialTheme.colorScheme.primary,
-                fontSize = 22.sp,
-                lineHeight = 28.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -296,15 +240,9 @@ private fun QualitySection(
 
         // Two rows of chips: presets wrap naturally onto a second line like the design
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FigmaChip("Small Size", selected = quality <= 50, onClick = { onQualityChange(50) })
-            FigmaChip("Balanced", selected = quality in 51..85, onClick = { onQualityChange(80) })
-            FigmaChip("High Quality", selected = quality > 85, onClick = { onQualityChange(95) })
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FigmaChip(
-                "Custom",
-                selected = false,
-                onClick = { /* opens a custom quality input if needed */ })
+            CommonChip("Small Size", selected = quality <= 50, onClick = { onQualityChange(50) })
+            CommonChip("Balanced", selected = quality in 51..85, onClick = { onQualityChange(80) })
+            CommonChip("High Quality", selected = quality > 85, onClick = { onQualityChange(95) })
         }
     }
 }
@@ -319,12 +257,12 @@ private fun ResizeSection(
     onCustomHeightChange: (String) -> Unit,
     onPercentSelected: (Int) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             "Resize (Optional)",
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
+            style = MaterialTheme.typography.bodyLarge,
+            lineHeight = 14.sp,
             fontWeight = FontWeight.Medium
         )
 
@@ -333,14 +271,14 @@ private fun ResizeSection(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                FigmaTextField(
+                CommonTextField(
                     value = if (resizeMode == ResizeMode.CUSTOM) customWidth else "",
                     label = "Width (px)",
                     placeholder = "Original",
                     onValueChange = onCustomWidthChange,
                     modifier = Modifier.weight(1f),
                 )
-                FigmaTextField(
+                CommonTextField(
                     value = if (resizeMode == ResizeMode.CUSTOM) customHeight else "",
                     label = "Height (px)",
                     placeholder = "Original",
@@ -370,7 +308,7 @@ private fun ResizeSection(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(50, 75, 100).forEach { percent ->
-                FigmaChip(
+                CommonChip(
                     "$percent%",
                     selected = resizeMode == ResizeMode.PERCENTAGE && resizePercent == percent,
                     onClick = { onPercentSelected(percent) },

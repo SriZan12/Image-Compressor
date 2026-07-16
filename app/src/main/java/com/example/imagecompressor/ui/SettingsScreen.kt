@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.imagecompressor.data.model.ThemePreference
 import com.example.imagecompressor.ui.components.CommonCard
-import com.example.imagecompressor.ui.components.FigmaChip
+import com.example.imagecompressor.ui.components.CommonChip
 import com.example.imagecompressor.ui.components.OutlinedPillButton
 import com.example.imagecompressor.ui.components.PrivacyBadge
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
@@ -55,7 +55,7 @@ fun SettingsScreen(
           modifier = Modifier.fillMaxWidth()
         ) {
           ThemePreference.entries.forEach { preference ->
-            FigmaChip(
+            CommonChip(
               preference.label,
               selected = state.themePreference == preference,
               onClick = { onSetTheme(preference) })

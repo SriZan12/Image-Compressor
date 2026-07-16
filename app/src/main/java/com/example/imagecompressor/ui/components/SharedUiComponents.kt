@@ -120,7 +120,9 @@ fun OutlinedPillButton(
                 .background(MaterialTheme.colorScheme.surfaceContainerLowest)
                 .border(
                     1.dp,
-                    if (enabled) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                    if (enabled) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.outlineVariant.copy(
+                        alpha = 0.7f
+                    ),
                     RoundedCornerShape(9999.dp)
                 )
                 .clickable(enabled = enabled, onClick = onClick)
@@ -149,7 +151,7 @@ fun OutlinedPillButton(
 }
 
 @Composable
-fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
+fun CommonChip(text: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier =
             Modifier
@@ -171,16 +173,13 @@ fun FigmaChip(text: String, selected: Boolean, onClick: () -> Unit) {
         Text(
             text,
             color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.1.sp,
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
 
 @Composable
-fun FigmaTextField(
+fun CommonTextField(
     value: String,
     label: String,
     placeholder: String,
@@ -194,14 +193,20 @@ fun FigmaTextField(
             Text(
                 placeholder,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 16.sp
+                style = MaterialTheme.typography.bodySmall
             )
         },
         modifier = modifier.height(56.dp),
-        label = { Text(label, color = MaterialTheme.colorScheme.primary, fontSize = 11.sp) },
+        label = {
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall
+            )
+        },
         singleLine = true,
         shape = RoundedCornerShape(8.dp),
-        textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
         colors =
             OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -364,7 +369,11 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Text(
+                body,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
