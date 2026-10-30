@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorSpace
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
@@ -14,260 +16,245 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import com.example.imagecompressor.data.model.CompressedImage
+import com.example.imagecompressor.data.model.CompressionAdjustment
 import com.example.imagecompressor.data.model.CompressionSettings
 import com.example.imagecompressor.data.model.OutputFormat
-import com.example.imagecompressor.data.model.ResizeMode
 import com.example.imagecompressor.data.model.SelectedImage
-import java.io.ByteArrayOutputStream
+import com.example.imagecompressor.util.compression.CompressionPolicy
+import com.example.imagecompressor.util.compression.EncodedCandidate
+import com.example.imagecompressor.util.compression.ExifOrientation
+import com.example.imagecompressor.util.compression.ImageContainer
+import com.example.imagecompressor.util.compression.PixelSize
+import com.example.imagecompressor.util.compression.TargetSizeSearch
 import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class ImageCompressor(private val context: Context) {
+/** On-device, bounded-memory still-image pipeline. All output metadata is newly generated. */
+class ImageCompressor(
+  private val context: Context,
+  private val workingPixelLimit: Long = CompressionPolicy.pixelBudget(Runtime.getRuntime().maxMemory()),
+) : ImageProcessor {
+  init { require(workingPixelLimit in 1..CompressionPolicy.MAX_WORKING_PIXELS) }
   private val contentResolver = context.contentResolver
 
-  suspend fun inspect(uri: Uri): SelectedImage =
-    withContext(Dispatchers.IO) {
-      val (displayName, reportedSize) = queryNameAndSize(uri)
-      val bounds = decodeBounds(uri)
-      val rotation = readRotationDegrees(uri)
-      val (width, height) =
-        if (rotation == 90 || rotation == 270) bounds.second to bounds.first else bounds
-
-      SelectedImage(
-        uri = uri,
-        displayName = displayName,
-        sizeBytes = reportedSize.takeIf { it > 0 } ?: queryAssetLength(uri),
-        width = width,
-        height = height,
-        format = contentResolver.getType(uri)?.substringAfter('/')?.uppercase() ?: "IMAGE",
-      )
+  override suspend fun inspect(uri: Uri): SelectedImage = withContext(Dispatchers.IO) {
+    val source = stageSource(uri)
+    try {
+      val info = readInfo(source)
+      val size = info.orientation.upright(info.size)
+      SelectedImage(uri, displayName(uri), source.length(), size.width, size.height, info.container.label)
+    } finally {
+      source.delete()
     }
-
-  suspend fun compress(
-    image: SelectedImage,
-    settings: CompressionSettings,
-  ): CompressedImage =
-    withContext(Dispatchers.IO) {
-      val requestedDimensions = calculateOutputDimensions(image, settings)
-      var bitmap = decodeSampledBitmap(image.uri, requestedWidth = requestedDimensions.first, requestedHeight = requestedDimensions.second)
-      bitmap = scaleBitmap(bitmap, width = requestedDimensions.first, height = requestedDimensions.second)
-      bitmap = flattenTransparencyForJpeg(bitmap, settings.outputFormat)
-
-      var quality = settings.quality.coerceIn(MIN_QUALITY, MAX_QUALITY)
-      var bytes = compressToBytes(bitmap, settings.outputFormat, quality)
-      val targetBytes = settings.targetBytes
-      var attempts = 0
-
-      // Quality controls lossy formats. If that is not enough, or PNG is selected,
-      // reduce dimensions gradually so target-size compression still converges.
-      while (targetBytes != null && bytes.size > targetBytes && attempts < MAX_TARGET_ATTEMPTS) {
-        if (settings.outputFormat != OutputFormat.PNG && quality > MIN_QUALITY) {
-          quality = max(MIN_QUALITY, quality - QUALITY_STEP)
-        } else {
-          val nextWidth = (bitmap.width * TARGET_SCALE_STEP).roundToInt().coerceAtLeast(1)
-          val nextHeight = (bitmap.height * TARGET_SCALE_STEP).roundToInt().coerceAtLeast(1)
-          if (nextWidth == bitmap.width && nextHeight == bitmap.height) break
-          bitmap = scaleBitmap(bitmap, nextWidth, nextHeight)
-        }
-        bytes = compressToBytes(bitmap, settings.outputFormat, quality)
-        attempts++
-      }
-
-      val outputDirectory = File(context.cacheDir, "compressed").apply { mkdirs() }
-      val filename =
-        "ImageCompressor_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}" +
-          ".${settings.outputFormat.extension}"
-      val outputFile = File(outputDirectory, filename)
-      FileOutputStream(outputFile).use { it.write(bytes) }
-
-      // Pixels are rotated during decode, so exported images should be treated as upright.
-      runCatching {
-        ExifInterface(outputFile.absolutePath).apply {
-          setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
-          saveAttributes()
-        }
-      }
-
-      val outputWidth = bitmap.width
-      val outputHeight = bitmap.height
-      bitmap.recycle()
-
-      CompressedImage(
-        original = image,
-        outputUri =
-          FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outputFile),
-        outputFilePath = outputFile.absolutePath,
-        compressedSizeBytes = outputFile.length(),
-        width = outputWidth,
-        height = outputHeight,
-        format = settings.outputFormat,
-      )
-    }
-
-  private fun queryNameAndSize(uri: Uri): Pair<String, Long> {
-    val projection = arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
-    contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-      if (cursor.moveToFirst()) {
-        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-        val name =
-          if (nameIndex >= 0) cursor.getString(nameIndex) ?: "Selected image"
-          else "Selected image"
-        val size = if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) cursor.getLong(sizeIndex) else 0L
-        return name to size
-      }
-    }
-    return "Selected image" to 0L
   }
 
-  private fun queryAssetLength(uri: Uri): Long =
-    runCatching { contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: 0L }
-      .getOrDefault(0L)
-
-  private fun decodeBounds(uri: Uri): Pair<Int, Int> {
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    val stream = contentResolver.openInputStream(uri) ?: error("Unable to open the selected image.")
-    // Bounds-only decoding intentionally returns null; the populated options carry the dimensions.
-    stream.use { BitmapFactory.decodeStream(it, null, options) }
-    if (options.outWidth <= 0 || options.outHeight <= 0) {
-      error("This image format could not be decoded.")
-    }
-    return options.outWidth to options.outHeight
-  }
-
-  private fun decodeSampledBitmap(uri: Uri, requestedWidth: Int, requestedHeight: Int): Bitmap {
-    val (sourceWidth, sourceHeight) = decodeBounds(uri)
-    var sampleSize = 1
-    while (
-      sourceWidth / (sampleSize * 2) >= requestedWidth &&
-        sourceHeight / (sampleSize * 2) >= requestedHeight
-    ) {
-      sampleSize *= 2
-    }
-    while (sourceWidth.toLong() * sourceHeight / (sampleSize.toLong() * sampleSize) > MAX_BITMAP_PIXELS) {
-      sampleSize *= 2
-    }
-
-    val options =
-      BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-        inPreferredConfig = Bitmap.Config.ARGB_8888
-      }
-    val decoded =
-      contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
-        ?: error("Unable to decode the selected image.")
-    return rotateBitmap(decoded, readRotationDegrees(uri))
-  }
-
-  private fun readRotationDegrees(uri: Uri): Int =
-    runCatching {
-        contentResolver.openInputStream(uri)?.use { stream ->
-          when (
-            ExifInterface(stream).getAttributeInt(
-              ExifInterface.TAG_ORIENTATION,
-              ExifInterface.ORIENTATION_NORMAL,
+  override suspend fun compress(image: SelectedImage, settings: CompressionSettings): CompressedImage {
+    // Outside withContext so prompt cancellation on dispatcher return also removes unpublished results.
+    var published: File? = null
+    try {
+      return withContext(Dispatchers.IO) {
+        pipelineMutex.withLock {
+          val source = stageSource(image.uri)
+          var base: Bitmap? = null
+          try {
+            val info = readInfo(source)
+            val uprightSource = info.orientation.upright(info.size)
+            val requested = CompressionPolicy.requestedSize(uprightSource, settings)
+            val desired = requested.fitPixels(workingPixelLimit)
+            val options = BitmapFactory.Options().apply {
+              inSampleSize = CompressionPolicy.sampleSize(info.size, desired, info.orientation, workingPixelLimit)
+              inPreferredConfig = Bitmap.Config.ARGB_8888
+              inPreferredColorSpace = ColorSpace.get(ColorSpace.Named.SRGB)
+            }
+            currentCoroutineContext().ensureActive()
+            val decoded = BitmapFactory.decodeFile(source.absolutePath, options)
+              ?: throw IOException("Unable to decode this image. It may be damaged.")
+            val adjustments = mutableSetOf<CompressionAdjustment>()
+            try {
+              currentCoroutineContext().ensureActive()
+              val decodedSize = PixelSize(decoded.width, decoded.height)
+              if (decodedSize.pixels > workingPixelLimit) throw IOException("This image exceeds the available memory budget.")
+              // Sampling can undershoot the requested size; never enlarge it again.
+              val actual = desired.fitInside(info.orientation.upright(decodedSize))
+              if (actual != requested) adjustments += CompressionAdjustment.MEMORY_LIMIT
+              if (settings.outputFormat == OutputFormat.JPEG && decoded.hasAlpha()) {
+                adjustments += CompressionAdjustment.JPEG_BACKGROUND
+              }
+              if (info.wideGamut || (Build.VERSION.SDK_INT >= 34 && decoded.hasGainmap())) {
+                adjustments += CompressionAdjustment.SDR_CONVERSION
+              }
+              base = render(decoded, actual, info.orientation, settings.outputFormat == OutputFormat.JPEG)
+            } finally {
+              decoded.recycle()
+            }
+            val upright = checkNotNull(base)
+            val initial = PixelSize(upright.width, upright.height)
+            val result = TargetSizeSearch().search(
+              initial, settings.quality, settings.targetBytes, settings.outputFormat != OutputFormat.PNG,
+              settings.allowTargetResize,
+              encode = { size, quality ->
+                currentCoroutineContext().ensureActive()
+                val bitmap = if (size == initial) upright else
+                  upright.scale(size.width, size.height, true)
+                try {
+                  encode(bitmap, size, quality, settings.outputFormat)
+                } finally {
+                  if (bitmap !== upright) bitmap.recycle()
+                }
+              },
+              discard = { it.delete() },
             )
-          ) {
-            ExifInterface.ORIENTATION_ROTATE_90 -> 90
-            ExifInterface.ORIENTATION_ROTATE_180 -> 180
-            ExifInterface.ORIENTATION_ROTATE_270 -> 270
-            else -> 0
-          }
-        } ?: 0
-      }
-      .getOrDefault(0)
-
-  private fun rotateBitmap(bitmap: Bitmap, degrees: Int): Bitmap {
-    if (degrees == 0) return bitmap
-    val rotated =
-      Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, Matrix().apply { postRotate(degrees.toFloat()) }, true)
-    if (rotated !== bitmap) bitmap.recycle()
-    return rotated
-  }
-
-  private fun calculateOutputDimensions(
-    image: SelectedImage,
-    settings: CompressionSettings,
-  ): Pair<Int, Int> {
-    val sourceWidth = image.width.coerceAtLeast(1)
-    val sourceHeight = image.height.coerceAtLeast(1)
-    val dimensions =
-      when (settings.resizeMode) {
-        ResizeMode.ORIGINAL -> sourceWidth to sourceHeight
-        ResizeMode.PERCENTAGE -> {
-          val scale = settings.resizePercent.coerceIn(10, 100) / 100.0
-          (sourceWidth * scale).roundToInt().coerceAtLeast(1) to
-            (sourceHeight * scale).roundToInt().coerceAtLeast(1)
-        }
-        ResizeMode.CUSTOM -> {
-          val requestedWidth = settings.customWidth.toIntOrNull()?.coerceAtLeast(1) ?: sourceWidth
-          val requestedHeight = settings.customHeight.toIntOrNull()?.coerceAtLeast(1) ?: sourceHeight
-          if (settings.preserveAspectRatio) {
-            val scale = min(requestedWidth.toDouble() / sourceWidth, requestedHeight.toDouble() / sourceHeight)
-            (sourceWidth * scale).roundToInt().coerceAtLeast(1) to
-              (sourceHeight * scale).roundToInt().coerceAtLeast(1)
-          } else {
-            requestedWidth to requestedHeight
+            val candidate = result.candidate
+            try {
+              currentCoroutineContext().ensureActive()
+              if (candidate.size != initial) adjustments += CompressionAdjustment.TARGET_SIZE
+              val directory = File(context.cacheDir, "compressed")
+              if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Unable to create the output folder. Check available storage.")
+              val output = File.createTempFile("ImageCompressor_", ".${settings.outputFormat.extension}", directory)
+              published = output
+              Files.move(candidate.value.toPath(), output.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+              currentCoroutineContext().ensureActive()
+              check(output.length() == candidate.bytes && candidate.bytes > 0)
+              CompressedImage(
+                original = image.copy(sizeBytes = source.length(), width = uprightSource.width,
+                  height = uprightSource.height, format = info.container.label),
+                outputUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", output),
+                outputFilePath = output.absolutePath,
+                compressedSizeBytes = output.length(),
+                width = candidate.size.width,
+                height = candidate.size.height,
+                format = settings.outputFormat,
+                targetBytes = settings.targetBytes,
+                adjustments = adjustments.toSet(),
+                encodingAttempts = result.attempts,
+                encodingQuality = candidate.quality.takeIf { settings.outputFormat != OutputFormat.PNG },
+              )
+            } finally {
+              candidate.value.delete()
+            }
+          } finally {
+            base?.recycle()
+            source.delete()
           }
         }
       }
-    return constrainToPixelBudget(dimensions.first, dimensions.second)
-  }
-
-  private fun constrainToPixelBudget(width: Int, height: Int): Pair<Int, Int> {
-    val pixels = width.toLong() * height
-    if (pixels <= MAX_BITMAP_PIXELS) return width to height
-    val scale = sqrt(MAX_BITMAP_PIXELS.toDouble() / pixels)
-    return (width * scale).roundToInt().coerceAtLeast(1) to
-      (height * scale).roundToInt().coerceAtLeast(1)
-  }
-
-  private fun scaleBitmap(bitmap: Bitmap, width: Int, height: Int): Bitmap {
-    if (bitmap.width == width && bitmap.height == height) return bitmap
-    val scaled = bitmap.scale(width, height)
-    if (scaled !== bitmap) bitmap.recycle()
-    return scaled
-  }
-
-  private fun flattenTransparencyForJpeg(bitmap: Bitmap, outputFormat: OutputFormat): Bitmap {
-    if (outputFormat != OutputFormat.JPEG || !bitmap.hasAlpha()) return bitmap
-    val flattened = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-    Canvas(flattened).apply {
-      drawColor(Color.WHITE)
-      drawBitmap(bitmap, 0f, 0f, null)
+    } catch (failure: Throwable) {
+      published?.delete()
+      if (failure is OutOfMemoryError) throw IOException("Not enough memory to process this image. Try a smaller image or close other apps.", failure)
+      throw failure
     }
-    bitmap.recycle()
-    return flattened
   }
 
-  private fun compressToBytes(bitmap: Bitmap, outputFormat: OutputFormat, quality: Int): ByteArray {
-    val format =
-      when (outputFormat) {
+  private suspend fun stageSource(uri: Uri): File {
+    val file = File.createTempFile("image-source-", ".tmp", context.cacheDir)
+    var complete = false
+    try {
+      val coroutine = currentCoroutineContext()
+      val input = contentResolver.openInputStream(uri) ?: throw IOException("Unable to open the selected image.")
+      input.use { source ->
+        file.outputStream().use { output ->
+          val buffer = ByteArray(65536)
+          var total = 0L
+          while (true) {
+            coroutine.ensureActive()
+            val count = source.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > CompressionPolicy.MAX_INPUT_BYTES) throw IOException("Choose an image no larger than 100 MiB.")
+            output.write(buffer, 0, count)
+          }
+          if (total == 0L) throw IOException("The selected image is empty.")
+        }
+      }
+      complete = true
+      return file
+    } finally {
+      if (!complete) file.delete()
+    }
+  }
+
+  private data class ImageInfo(val size: PixelSize, val orientation: ExifOrientation,
+    val container: ImageContainer, val wideGamut: Boolean)
+
+  private suspend fun readInfo(file: File): ImageInfo {
+    val coroutine = currentCoroutineContext()
+    val container = ImageContainer.validate(file) { coroutine.ensureActive() }
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Unable to read this image's dimensions.")
+    val size = PixelSize(bounds.outWidth, bounds.outHeight)
+    CompressionPolicy.validateInput(size)
+    val orientation = ExifOrientation.from(ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1))
+    return ImageInfo(size, orientation, container, bounds.outColorSpace?.isWideGamut == true)
+  }
+
+  private fun render(source: Bitmap, size: PixelSize, orientation: ExifOrientation, whiteBackground: Boolean): Bitmap {
+    // A fresh SDR sRGB buffer combines orientation, resize, color conversion and optional flattening.
+    val result = createBitmap(size.width, size.height, Bitmap.Config.ARGB_8888,
+      hasAlpha = !whiteBackground, colorSpace = ColorSpace.get(ColorSpace.Named.SRGB))
+    try {
+      val canvas = Canvas(result)
+      if (whiteBackground) canvas.drawColor(Color.WHITE)
+      val matrix = Matrix().apply { setValues(orientation.matrix(PixelSize(source.width, source.height), size)) }
+      canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG))
+      return result
+    } catch (failure: Throwable) {
+      result.recycle()
+      throw failure
+    }
+  }
+
+  private suspend fun encode(bitmap: Bitmap, size: PixelSize, quality: Int, format: OutputFormat): EncodedCandidate<File> {
+    val file = File.createTempFile("image-candidate-", ".${format.extension}", context.cacheDir)
+    var complete = false
+    try {
+      currentCoroutineContext().ensureActive()
+      val codec = when (format) {
         OutputFormat.JPEG -> Bitmap.CompressFormat.JPEG
         OutputFormat.PNG -> Bitmap.CompressFormat.PNG
-        OutputFormat.WEBP ->
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Bitmap.CompressFormat.WEBP_LOSSY
-          else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP
+        OutputFormat.WEBP -> Bitmap.CompressFormat.WEBP_LOSSY
       }
-    return ByteArrayOutputStream().use { output ->
-      check(bitmap.compress(format, quality, output)) { "Unable to encode the compressed image." }
-      output.toByteArray()
+      file.outputStream().use { output ->
+        if (!bitmap.compress(codec, quality, output)) throw IOException("The image encoder could not produce an output.")
+      }
+      currentCoroutineContext().ensureActive()
+      // Include metadata overhead in every measured candidate, not after target selection.
+      ExifInterface(file).apply {
+        setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+        saveAttributes()
+      }
+      currentCoroutineContext().ensureActive()
+      val bytes = file.length()
+      if (bytes <= 0) throw IOException("The image encoder produced an empty output.")
+      complete = true
+      return EncodedCandidate(file, size, quality, bytes)
+    } catch (failure: IOException) {
+      throw IOException("Unable to write the compressed image. Check available storage.", failure)
+    } finally {
+      if (!complete) file.delete()
     }
+  }
+
+  private fun displayName(uri: Uri): String {
+    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+      if (cursor.moveToFirst()) {
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0) return cursor.getString(index) ?: "Selected image"
+      }
+    }
+    return "Selected image"
   }
 
   private companion object {
-    const val MIN_QUALITY = 10
-    const val MAX_QUALITY = 100
-    const val QUALITY_STEP = 5
-    const val TARGET_SCALE_STEP = 0.9
-    const val MAX_TARGET_ATTEMPTS = 40
-    const val MAX_BITMAP_PIXELS = 16_000_000L
+    // Batch and overlapping callers share one native bitmap pipeline per process.
+    val pipelineMutex = Mutex()
   }
 }

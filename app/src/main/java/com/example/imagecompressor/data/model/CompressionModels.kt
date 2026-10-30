@@ -15,6 +15,9 @@ enum class ResizeMode(val label: String) {
   CUSTOM("Custom size"),
 }
 
+enum class TargetSizeStatus { NOT_REQUESTED, MET, UNMET }
+enum class CompressionAdjustment { MEMORY_LIMIT, TARGET_SIZE, JPEG_BACKGROUND, SDR_CONVERSION }
+
 enum class ThemePreference(val label: String) {
   SYSTEM("Use device setting"),
   LIGHT("Light"),
@@ -30,6 +33,7 @@ data class CompressionSettings(
   val customHeight: String = "",
   val preserveAspectRatio: Boolean = true,
   val outputFormat: OutputFormat = OutputFormat.JPEG,
+  val allowTargetResize: Boolean = true,
 )
 
 data class SelectedImage(
@@ -53,21 +57,43 @@ data class CompressedImage(
   val format: OutputFormat,
   val historyId: Long = 0,
   val savedUri: Uri? = null,
+  val targetBytes: Long? = null,
+  val adjustments: Set<CompressionAdjustment> = emptySet(),
+  val encodingAttempts: Int = 1,
+  val encodingQuality: Int? = null,
 ) {
   val reductionPercent: Int
     get() = calculateReductionPercent(original.sizeBytes, compressedSizeBytes)
+
+  val targetSizeStatus: TargetSizeStatus
+    get() = targetSizeStatus(compressedSizeBytes, targetBytes)
+}
+
+fun targetSizeStatus(actualBytes: Long, targetBytes: Long?): TargetSizeStatus = when {
+  targetBytes == null -> TargetSizeStatus.NOT_REQUESTED
+  actualBytes <= targetBytes -> TargetSizeStatus.MET
+  else -> TargetSizeStatus.UNMET
 }
 
 fun calculateReductionPercent(originalSizeBytes: Long, compressedSizeBytes: Long): Int {
   if (originalSizeBytes <= 0) return 0
   return ((1.0 - compressedSizeBytes.toDouble() / originalSizeBytes) * 100)
     .roundToInt()
-    .coerceIn(0, 100)
+    .coerceAtMost(100)
+}
+
+fun describeSizeChange(originalBytes: Long, outputBytes: Long): String {
+  if (originalBytes <= 0) return "Original size unknown"
+  if (originalBytes == outputBytes) return "Same file size"
+  val percent = kotlin.math.abs(calculateReductionPercent(originalBytes, outputBytes).toLong())
+  val amount = if (percent == 0L) "Less than 1%" else "$percent%"
+  return "$amount ${if (outputBytes < originalBytes) "smaller" else "larger"}"
 }
 
 fun Long.toReadableSize(): String {
   if (this <= 0L) return "Unknown size"
-  val kb = this / 1024.0
-  if (kb < 1024) return "${"%.1f".format(kb)} KB"
-  return "${"%.2f".format(kb / 1024.0)} MB"
+  if (this < 1000L) return "$this B"
+  val kb = this / 1000.0
+  if (kb < 1000) return "${"%.1f".format(kb)} KB"
+  return "${"%.2f".format(kb / 1000.0)} MB"
 }

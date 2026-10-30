@@ -9,13 +9,20 @@ import kotlinx.coroutines.flow.update
 
 class CompressionSettingsFeature(
     private val state: MutableStateFlow<ImageCompressorUiState>,
+    private val rememberSettings: (CompressionSettings) -> Unit = {},
 ) {
+  fun applySettings(settings: CompressionSettings) { updateSettings { settings } }
+
   fun updateQuality(quality: Int) {
     updateSettings { copy(quality = quality.coerceIn(10, 100)) }
   }
 
   fun updateTargetBytes(targetBytes: Long?) {
     updateSettings { copy(targetBytes = targetBytes) }
+  }
+
+  fun updateAllowTargetResize(allow: Boolean) {
+    updateSettings { copy(allowTargetResize = allow) }
   }
 
   fun updateResizeMode(resizeMode: ResizeMode) {
@@ -43,6 +50,8 @@ class CompressionSettingsFeature(
   }
 
   private fun updateSettings(block: CompressionSettings.() -> CompressionSettings) {
-    state.update { it.copy(compressionSettings = it.compressionSettings.block()) }
+    val updated = state.value.compressionSettings.block()
+    state.update { it.copy(compressionSettings = updated) }
+    rememberSettings(updated)
   }
 }

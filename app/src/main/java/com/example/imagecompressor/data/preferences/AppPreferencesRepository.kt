@@ -3,6 +3,8 @@ package com.example.imagecompressor.data.preferences
 import android.content.Context
 import androidx.core.content.edit
 import com.example.imagecompressor.data.model.ThemePreference
+import com.example.imagecompressor.data.model.CompressionSettings
+import com.example.imagecompressor.data.model.SettingsCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,10 +12,14 @@ import kotlinx.coroutines.flow.asStateFlow
 interface AppPreferencesRepository {
   val onboardingComplete: StateFlow<Boolean>
   val themePreference: StateFlow<ThemePreference>
+  val dynamicColor: StateFlow<Boolean>
+  val lastCompressionSettings: CompressionSettings
 
   fun setOnboardingComplete()
 
   fun setThemePreference(preference: ThemePreference)
+  fun setDynamicColor(enabled: Boolean)
+  fun rememberCompressionSettings(settings: CompressionSettings)
 }
 
 class DefaultAppPreferencesRepository(context: Context) : AppPreferencesRepository {
@@ -33,6 +39,19 @@ class DefaultAppPreferencesRepository(context: Context) : AppPreferencesReposito
         .getOrDefault(ThemePreference.SYSTEM)
     )
   override val themePreference = _themePreference.asStateFlow()
+
+  private val _dynamicColor = MutableStateFlow(preferences.getBoolean("dynamic_color", true))
+  override val dynamicColor = _dynamicColor.asStateFlow()
+  override val lastCompressionSettings: CompressionSettings
+    get() = SettingsCodec.decode(preferences.getString("compression_settings", null))
+
+  override fun setDynamicColor(enabled: Boolean) {
+    preferences.edit { putBoolean("dynamic_color", enabled) }
+    _dynamicColor.value = enabled
+  }
+  override fun rememberCompressionSettings(settings: CompressionSettings) {
+    preferences.edit { putString("compression_settings", SettingsCodec.encode(settings)) }
+  }
 
   override fun setOnboardingComplete() {
     preferences.edit { putBoolean(KEY_ONBOARDING_COMPLETE, true) }

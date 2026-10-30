@@ -1,80 +1,42 @@
 package com.example.imagecompressor.ui.viewmodel
 
 import com.example.imagecompressor.data.ImageRepository
+import com.example.imagecompressor.data.userMessage
 import com.example.imagecompressor.data.model.CompressedImage
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class GallerySaveFeature(
-    private val state: MutableStateFlow<ImageCompressorUiState>,
-    private val imageRepository: ImageRepository,
-    private val scope: CoroutineScope,
-    private val showMessage: (String) -> Unit,
-) {
-  fun saveToGallery(image: CompressedImage) {
-    if (image.savedUri != null) {
-      showMessage("This image is already saved.")
-      return
-    }
-    scope.launch {
-      state.update { it.copy(isSaving = true, message = null) }
-      runCatching { imageRepository.saveToGallery(image) }
-        .onSuccess { saved ->
-          state.update { current ->
-            current.copy(
-              compressedImages =
-                current.compressedImages.map { if (it.outputFilePath == saved.outputFilePath) saved else it },
-              compareImage =
-                current.compareImage?.let {
-                  if (it.outputFilePath == saved.outputFilePath) saved else it
-                },
-              isSaving = false,
-              message = "Saved to your gallery.",
-            )
-          }
+class GallerySaveFeature(private val state: MutableStateFlow<ImageCompressorUiState>,
+  private val imageRepository: ImageRepository, private val scope: CoroutineScope,
+  private val showMessage: (String) -> Unit) {
+  fun saveToGallery(image: CompressedImage) = save(listOf(image))
+  fun saveAllToGallery() = save(state.value.compressedImages.filter { it.savedUri == null })
+  private fun save(images: List<CompressedImage>) {
+    if (state.value.isSaving || state.value.isInitializing || state.value.initializationError != null) return
+    if (images.isEmpty()) { showMessage("All available results are already saved."); return }
+    scope.launch(start = CoroutineStart.UNDISPATCHED) {
+      state.update { it.copy(isSaving = true, saveErrors = emptyMap(), message = null) }
+      var savedCount = 0
+      try {
+        for (image in images) {
+          try {
+            val saved = imageRepository.saveToGallery(image)
+            savedCount++
+            state.update { current -> current.copy(
+              compressedImages = current.compressedImages.map { if (it.historyId == saved.historyId) saved else it },
+              compareImage = current.compareImage?.let { if (it.historyId == saved.historyId) saved else it }) }
+          } catch (cancelled: CancellationException) { throw cancelled }
+          catch (failure: Exception) { state.update {
+            it.copy(saveErrors = it.saveErrors + (image.historyId to userMessage(failure, "Unable to save this image. Check available storage and retry.")))
+          } }
         }
-        .onFailure { throwable ->
-          state.update {
-            it.copy(isSaving = false, message = throwable.message ?: "Unable to save the image.")
-          }
-        }
-    }
-  }
-
-  fun saveAllToGallery() {
-    val images = state.value.compressedImages.filter { it.savedUri == null }
-    if (images.isEmpty()) {
-      showMessage("All compressed images are already saved.")
-      return
-    }
-    scope.launch {
-      state.update { it.copy(isSaving = true, message = null) }
-      runCatching {
-          val savedByPath =
-            images.associate { image ->
-              val saved = imageRepository.saveToGallery(image)
-              saved.outputFilePath to saved
-            }
-          state.update { current ->
-            current.copy(
-              compressedImages =
-                current.compressedImages.map { image -> savedByPath[image.outputFilePath] ?: image },
-              compareImage =
-                current.compareImage?.let { image -> savedByPath[image.outputFilePath] ?: image },
-            )
-          }
-        }
-        .onSuccess {
-          state.update { it.copy(isSaving = false, message = "Saved all images to your gallery.") }
-        }
-        .onFailure { throwable ->
-          state.update {
-            it.copy(isSaving = false, message = throwable.message ?: "Unable to save every image.")
-          }
-        }
+        showMessage("$savedCount saved to gallery. ${state.value.saveErrors.size} failed.")
+      } finally { state.update { it.copy(isSaving = false) } }
     }
   }
 }

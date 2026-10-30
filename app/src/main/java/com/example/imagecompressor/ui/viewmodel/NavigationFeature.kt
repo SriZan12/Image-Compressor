@@ -17,6 +17,7 @@ class NavigationFeature(
   }
 
   fun navigateTo(screen: AppScreen) {
+    if (state.value.isCompressing || state.value.isSaving || state.value.isInitializing || state.value.isLoadingImages) return
     state.update { it.copy(screen = screen, message = null) }
   }
 
@@ -25,10 +26,10 @@ class NavigationFeature(
       when (state.value.screen) {
         AppScreen.ONBOARDING,
         AppScreen.HOME -> AppScreen.HOME
-        AppScreen.PREVIEW -> AppScreen.HOME
-        AppScreen.COMPRESSION_SETTINGS -> AppScreen.PREVIEW
+        AppScreen.PREVIEW -> if (state.value.selectedImages.isEmpty()) AppScreen.HOME else AppScreen.COMPRESSION_SETTINGS
+        AppScreen.COMPRESSION_SETTINGS -> AppScreen.HOME
         AppScreen.RESULTS -> AppScreen.COMPRESSION_SETTINGS
-        AppScreen.IMAGE_COMPARE -> AppScreen.RESULTS
+        AppScreen.IMAGE_COMPARE -> state.value.compareReturnScreen
         AppScreen.HISTORY,
         AppScreen.SETTINGS -> AppScreen.HOME
       }
@@ -43,13 +44,16 @@ class NavigationFeature(
         compressedImages = emptyList(),
         compareImage = null,
         progress = BatchProgress(),
+        batch = null,
+        saveErrors = emptyMap(),
         message = null,
       )
     }
   }
 
   fun openImageCompare(image: CompressedImage) {
-    state.update { it.copy(screen = AppScreen.IMAGE_COMPARE, compareImage = image, message = null) }
+    state.update { it.copy(screen = AppScreen.IMAGE_COMPARE, compareImage = image,
+      compareReturnScreen = if (it.screen == AppScreen.HISTORY) AppScreen.HISTORY else AppScreen.RESULTS, message = null) }
   }
 
   fun showMessage(message: String) {

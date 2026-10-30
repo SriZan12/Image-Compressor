@@ -10,10 +10,11 @@ android {
     compileSdk = 37
     defaultConfig {
         applicationId = "com.example.imagecompressor"
-        minSdk = 26
+        minSdk = 31
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -32,6 +33,13 @@ android {
       buildConfig = false
       shaders = false
     }
+
+    testOptions.unitTests.isIncludeAndroidResources = true
+    testOptions.unitTests.all {
+      it.systemProperty("shrink.screenshots", layout.buildDirectory.dir("design").get().asFile.absolutePath)
+    }
+    sourceSets.getByName("test").resources.directories.add("src/androidTest/assets")
+    sourceSets.getByName("test").resources.directories.add("schemas")
 
     packaging {
       resources {
@@ -70,10 +78,15 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+  androidTestImplementation(libs.androidx.compose.ui.test.accessibility)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
   // Local tests: jUnit, coroutines, Android runner
+  testImplementation(composeBom)
+  testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.junit)
+  testImplementation(libs.robolectric)
+  testImplementation(libs.kotlinx.coroutines.test)
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)
   androidTestImplementation(libs.androidx.test.ext.junit)

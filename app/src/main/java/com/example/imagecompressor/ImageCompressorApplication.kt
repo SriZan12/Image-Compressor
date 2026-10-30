@@ -21,7 +21,7 @@ class AppContainer(application: Application) {
         ImageCompressorDatabase::class.java,
         "image-compressor.db",
       )
-      .fallbackToDestructiveMigration(false)
+      .addMigrations(ImageCompressorDatabase.MIGRATION_1_2)
       .build()
 
   val preferencesRepository: AppPreferencesRepository = DefaultAppPreferencesRepository(application)
@@ -29,7 +29,7 @@ class AppContainer(application: Application) {
   val imageRepository: ImageRepository =
     DefaultImageRepository(
       context = application,
-      historyDao = database.historyDao(),
+      database = database,
       imageCompressor = ImageCompressor(application),
       gallerySaver = GallerySaver(application),
     )

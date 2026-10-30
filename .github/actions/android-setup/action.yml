@@ -1,0 +1,19 @@
+name: Android build environment
+description: Install the JDKs, verify the wrapper, and prepare the compile SDK.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+      with:
+        distribution: temurin
+        java-version: |
+          17
+          21
+    - uses: gradle/actions/setup-gradle@4c125117fe7c5aed11272ec4213f602f012f89f2 # v5
+      with:
+        cache-read-only: ${{ github.event_name == 'pull_request' }}
+    - name: Install Android SDK packages
+      shell: bash
+      run: |
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37' 'build-tools;36.0.0' 'platform-tools'
+        printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties

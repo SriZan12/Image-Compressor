@@ -1,397 +1,230 @@
 package com.example.imagecompressor.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import com.example.imagecompressor.data.model.CompressionSettings
-import com.example.imagecompressor.data.model.OutputFormat
-import com.example.imagecompressor.data.model.ResizeMode
-import com.example.imagecompressor.theme.FigmaUi
-import com.example.imagecompressor.ui.components.BottomActionBar
-import com.example.imagecompressor.ui.components.FigmaCard
-import com.example.imagecompressor.ui.components.FigmaChip
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
-import com.example.imagecompressor.ui.components.FigmaTextField
-import com.example.imagecompressor.ui.components.PrivacyBadge
-import com.example.imagecompressor.ui.components.SectionCard
-import com.example.imagecompressor.ui.components.roundToStep
+import com.example.imagecompressor.R
+import com.example.imagecompressor.data.model.*
+import com.example.imagecompressor.theme.Space
+import com.example.imagecompressor.ui.components.*
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
+import com.example.imagecompressor.util.compression.CompressionPolicy
+import com.example.imagecompressor.util.compression.PixelSize
+import kotlin.math.roundToInt
 
 @Composable
-fun CompressionSettingsScreen(
-    state: ImageCompressorUiState,
-    modifier: Modifier = Modifier,
-    viewModel: ImageCompressorViewModel,
-) {
+fun presetLabel(preset: CompressionPreset?): String = stringResource(when (preset) {
+  CompressionPreset.SMALLER -> R.string.preset_smaller
+  CompressionPreset.BALANCED -> R.string.preset_balanced
+  CompressionPreset.BEST_QUALITY -> R.string.preset_best
+  CompressionPreset.SIZE_LIMIT -> R.string.preset_limit
+  null -> R.string.custom_settings
+})
+
+@Composable
+fun photoCount(count: Int): String = pluralStringResource(R.plurals.photo_count, count, count)
+
+@Composable
+fun CompressionSettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier,
+  onSettingsChange: (CompressionSettings) -> Unit, onCompress: () -> Unit, onEditSelection: () -> Unit) {
   val settings = state.compressionSettings
-  Box(modifier = modifier.fillMaxSize().background(FigmaUi.Background)) {
-    LazyColumn(
-      modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 128.dp),
-      verticalArrangement = Arrangement.spacedBy(32.dp),
-    ) {
-      item {
-        PrivacyBadge(text = "Processed locally on your device")
-      }
-
-      item {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-          state.selectedImages.take(3).forEach { image ->
-            AsyncImage(
-              model = image.uri,
-              contentDescription = image.displayName,
-              modifier =
-                Modifier
-                  .weight(1f)
-                  .height(84.dp)
-                  .clip(RoundedCornerShape(12.dp))
-                  .background(FigmaUi.Surface)
-                  .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-              contentScale = ContentScale.Crop,
-            )
-          }
-          val remaining = (state.selectedImages.size - 3).coerceAtLeast(0)
-          if (state.selectedImages.size < 3) {
-            repeat(3 - state.selectedImages.size) {
-              Box(modifier = Modifier.weight(1f).height(84.dp).clip(RoundedCornerShape(12.dp)).background(FigmaUi.Surface))
-            }
-          }
-          Box(
-            modifier =
-              Modifier
-                .weight(1f)
-                .height(84.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFE6E8EE))
-                .border(1.dp, FigmaUi.Border.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-          ) {
-            Text("+$remaining", color = FigmaUi.Body, fontSize = 16.sp, lineHeight = 24.sp)
-          }
+  val finishEditing = finishNumericEntry()
+  var advanced by rememberSaveable { mutableStateOf(settings.preset() == null) }
+  var unit by rememberSaveable { mutableStateOf(TargetUnit.MB) }
+  var target by rememberSaveable { mutableStateOf(targetText(settings.targetBytes ?: 1_000_000, unit)) }
+  val targetValid = settings.targetBytes == null || parseTargetBytes(target, unit) != null
+  val dimensionsValid = remember(settings, state.selectedImages) {
+    state.selectedImages.all { image -> runCatching {
+      CompressionPolicy.requestedSize(PixelSize(image.width, image.height), settings)
+    }.isSuccess }
+  }
+  AdaptiveActionScreen(modifier, primary = { wide ->
+    Column(if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
+      val image = state.selectedImages.firstOrNull()
+      if (image != null) Photo(image.uri, image.displayName,
+        if (wide) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(240.dp))
+      Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+          Text(photoCount(state.selectedImages.size), style = MaterialTheme.typography.titleMedium)
+          Text(state.selectedImages.sumOf { it.sizeBytes }.toReadableSize(), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        TextButton(onEditSelection, enabled = !state.isLoadingImages) { Text(stringResource(R.string.edit_selection)) }
       }
-
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-            Text("Quality", color = FigmaUi.Ink, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-            Text("${settings.quality}%", color = FigmaUi.Primary, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
-          }
-          Slider(
-            value = settings.quality.toFloat(),
-            onValueChange = { viewModel.updateQuality(it.roundToStep()) },
-            valueRange = 10f..100f,
-            steps = 8,
-            colors =
-              SliderDefaults.colors(
-                thumbColor = FigmaUi.Primary,
-                activeTrackColor = FigmaUi.Primary,
-                inactiveTrackColor = Color(0xFFE1E2E8),
-              ),
-          )
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            FigmaChip(
-              "Small Size",
-              selected = settings.quality <= 50,
-              onClick = { viewModel.updateQuality(50) })
-            FigmaChip(
-              "Balanced",
-              selected = settings.quality in 51..85,
-              onClick = { viewModel.updateQuality(80) })
-            FigmaChip(
-              "High Quality",
-              selected = settings.quality > 85,
-              onClick = { viewModel.updateQuality(95) })
-          }
-        }
-      }
-
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          Text("Target Size", color = FigmaUi.Ink, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf(null to "Off", 100L * 1024 to "100 KB", 500L * 1024 to "500 KB", 1024L * 1024 to "1 MB")
-              .forEach { (bytes, label) ->
-                FigmaChip(
-                  label,
-                  selected = settings.targetBytes == bytes,
-                  onClick = { viewModel.updateTargetBytes(bytes) })
-              }
-          }
-        }
-      }
-
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-          Text("Resize (Optional)", color = FigmaUi.Ink, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-          Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-            FigmaTextField(
-              value = settings.customWidth.ifBlank { if (settings.resizeMode == ResizeMode.CUSTOM) "" else "Original" },
-              label = "Width (px)",
-              onValueChange = {
-                viewModel.updateResizeMode(ResizeMode.CUSTOM)
-                viewModel.updateCustomWidth(it)
-              },
-              modifier = Modifier.weight(1f),
-            )
-            FigmaTextField(
-              value = settings.customHeight.ifBlank { if (settings.resizeMode == ResizeMode.CUSTOM) "" else "Original" },
-              label = "Height (px)",
-              onValueChange = {
-                viewModel.updateResizeMode(ResizeMode.CUSTOM)
-                viewModel.updateCustomHeight(it)
-              },
-              modifier = Modifier.weight(1f),
-            )
-          }
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(50, 75, 100).forEach { percent ->
-              FigmaChip(
-                "$percent%",
-                selected = settings.resizeMode == ResizeMode.PERCENTAGE && settings.resizePercent == percent,
-                onClick = {
-                  viewModel.updateResizeMode(ResizeMode.PERCENTAGE)
-                  viewModel.updateResizePercent(percent)
-                },
-              )
-            }
-            FigmaChip(
-              "Original",
-              selected = settings.resizeMode == ResizeMode.ORIGINAL,
-              onClick = { viewModel.updateResizeMode(ResizeMode.ORIGINAL) })
-          }
-        }
-      }
-
-      item {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-          Text("Output Format", color = FigmaUi.Ink, fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium)
-          Row(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(FigmaUi.Surface).padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(0.dp),
-          ) {
-            OutputFormat.entries.forEach { format ->
-              Box(
-                modifier =
-                  Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (settings.outputFormat == format) Color.White else Color.Transparent)
-                    .clickable { viewModel.updateOutputFormat(format) },
-                contentAlignment = Alignment.Center,
-              ) {
-                Text(
-                  format.label,
-                  color = if (settings.outputFormat == format) FigmaUi.Ink else FigmaUi.Body,
-                  fontSize = 14.sp,
-                  lineHeight = 20.sp,
-                  fontWeight = FontWeight.Medium,
-                )
+    }
+  }, detail = { wide, inlineActions ->
+    Column(verticalArrangement = Arrangement.spacedBy(Space.section)) {
+      if (wide) PageTitle(stringResource(R.string.choose_size), stringResource(R.string.settings_body))
+      else Text(stringResource(R.string.settings_body), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      BoxWithConstraints {
+        val columns = if (maxWidth < 340.dp || LocalDensity.current.fontScale > 1.3f) 1 else 2
+        Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Space.md)) {
+          CompressionPreset.entries.chunked(columns).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+              row.forEach { preset ->
+                PresetCard(preset, settings.preset() == preset, Modifier.weight(1f)) {
+                  val next = preset.settings()
+                  if (next.targetBytes != null) { unit = TargetUnit.MB; target = "1" }
+                  onSettingsChange(next)
+                }
               }
             }
           }
         }
       }
-
-      item {
-        FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-              Text(
-                "Preserve Aspect Ratio",
-                color = FigmaUi.Ink,
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                fontWeight = FontWeight.Medium
-              )
-              Text(
-                "Avoid stretching custom dimensions.",
-                color = FigmaUi.Body,
-                fontSize = 14.sp,
-                lineHeight = 20.sp
-              )
-            }
-            Switch(
-              checked = settings.preserveAspectRatio,
-              onCheckedChange = viewModel::updatePreserveAspectRatio,
-              colors =
-                SwitchDefaults.colors(
-                  checkedThumbColor = Color.White,
-                  checkedTrackColor = FigmaUi.Primary,
-                  uncheckedTrackColor = FigmaUi.Border,
-                ),
-            )
+      if (settings.preset() == null) StatusPill(stringResource(R.string.custom_settings), icon = R.drawable.ic_tune)
+      Text(stringResource(R.string.preset_help), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      if (settings.targetBytes != null) SectionCard {
+        Text(stringResource(R.string.size_limit), style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(target, { value ->
+          target = value
+          parseTargetBytes(value, unit)?.let { onSettingsChange(settings.copy(targetBytes = it)) }
+        }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.size_limit)) }, singleLine = true,
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+          keyboardActions = KeyboardActions(onDone = { finishEditing() }), isError = !targetValid,
+          supportingText = { Text(stringResource(if (targetValid) R.string.target_hint else R.string.target_invalid)) })
+        Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(Space.md)) {
+          TargetUnit.entries.forEach { option ->
+            FilterChip(unit == option, onClick = {
+              // Preserve the limit when switching units, including any valid uncommitted text.
+              val bytes = parseTargetBytes(target, unit) ?: settings.targetBytes
+              unit = option
+              target = targetText(bytes, option)
+            }, label = { Text(option.label) })
           }
         }
+        Text(stringResource(R.string.decimal_units), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SettingSwitch(stringResource(R.string.target_resize), stringResource(R.string.target_resize_body), settings.allowTargetResize) {
+          onSettingsChange(settings.copy(allowTargetResize = it))
+        }
+      }
+      Surface(onClick = { advanced = !advanced }, shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().padding(Space.lg), horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
+          AppIcon(R.drawable.ic_tune)
+          Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.advanced), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.advanced_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          AppIcon(if (advanced) R.drawable.ic_expand_less else R.drawable.ic_expand_more,
+            description = stringResource(if (advanced) R.string.advanced_close else R.string.advanced_open))
+        }
+      }
+      if (advanced) AdvancedSettings(settings, dimensionsValid, onSettingsChange)
+      if (!dimensionsValid && !advanced) Notice(stringResource(R.string.resize_error), error = true)
+      inlineActions()
+      PrivacyNote()
+    }
+  }, actions = {
+    ActionButton(stringResource(R.string.compress_photos), onCompress, Modifier.fillMaxWidth(), R.drawable.ic_compress,
+      enabled = targetValid && dimensionsValid && state.selectedImages.isNotEmpty() && !state.isLoadingImages && !state.isCompressing)
+  })
+}
+
+@Composable
+private fun PresetCard(preset: CompressionPreset, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+  Surface(modifier.selectable(selected, onClick = onClick, role = Role.RadioButton), shape = MaterialTheme.shapes.large,
+    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+    border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+    Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(Space.lg), verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
+        Text(presetLabel(preset), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+        if (selected) AppIcon(R.drawable.ic_check_circle)
+      }
+      Text(stringResource(when (preset) {
+        CompressionPreset.SMALLER -> R.string.preset_smaller_body
+        CompressionPreset.BALANCED -> R.string.preset_balanced_body
+        CompressionPreset.BEST_QUALITY -> R.string.preset_best_body
+        CompressionPreset.SIZE_LIMIT -> R.string.preset_limit_body
+      }), style = MaterialTheme.typography.bodySmall)
+    }
+  }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AdvancedSettings(settings: CompressionSettings, dimensionsValid: Boolean, onChange: (CompressionSettings) -> Unit) {
+  val finishEditing = finishNumericEntry()
+  SectionCard {
+    Text(stringResource(R.string.output_format), style = MaterialTheme.typography.titleMedium)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+      OutputFormat.entries.forEach { format ->
+        FilterChip(settings.outputFormat == format, { onChange(settings.copy(outputFormat = format)) }, label = { Text(format.label) })
       }
     }
-
-    BottomActionBar {
-      FigmaPrimaryButton(
-        text = "Compress ${state.selectedImages.size} Image${if (state.selectedImages.size == 1) "" else "s"}",
-        onClick = viewModel::compressSelectedImages,
-      )
-    }
-  }
-}
-
-@Composable
-fun SettingsQualityCard(settings: CompressionSettings, onQualityChange: (Int) -> Unit) {
-  SectionCard {
-    Text("Quality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    Text("${settings.quality}% quality")
-    Slider(
-      value = settings.quality.toFloat(),
-      onValueChange = { onQualityChange(it.roundToStep()) },
-      valueRange = 10f..100f,
-      steps = 8,
-    )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-      Text("Smaller File", style = MaterialTheme.typography.labelMedium)
-      Text("Better Quality", style = MaterialTheme.typography.labelMedium)
-    }
-  }
-}
-
-@Composable
-fun SettingsTargetCard(settings: CompressionSettings, onTargetChange: (Long?) -> Unit) {
-  SectionCard {
-    Text(
-      "Target file size",
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Bold
-    )
-    Text("Optional. The app will try to get close to your chosen size.")
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      listOf(
-        null to "Off",
-        100L * 1024 to "100 KB",
-        500L * 1024 to "500 KB",
-        1024L * 1024 to "1 MB"
-      )
-        .forEach { (bytes, label) ->
-          FilterChip(
-            selected = settings.targetBytes == bytes,
-            onClick = { onTargetChange(bytes) },
-            label = { Text(label) })
-        }
-    }
-  }
-}
-
-@Composable
-fun SettingsResizeCard(
-  settings: CompressionSettings,
-  onResizeModeChange: (ResizeMode) -> Unit,
-  onResizePercentChange: (Int) -> Unit,
-  onCustomWidthChange: (String) -> Unit,
-  onCustomHeightChange: (String) -> Unit,
-  onPreserveChange: (Boolean) -> Unit,
-) {
-  SectionCard {
-    Text("Resize", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    ResizeMode.entries.forEach { mode ->
-      FilterChip(
-        selected = settings.resizeMode == mode,
-        onClick = { onResizeModeChange(mode) },
-        label = { Text(mode.label) },
-      )
+    Text(stringResource(when (settings.outputFormat) { OutputFormat.JPEG -> R.string.jpeg_help; OutputFormat.PNG -> R.string.png_help; OutputFormat.WEBP -> R.string.webp_help }),
+      style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    HorizontalDivider()
+    Text("${stringResource(R.string.quality)} · ${settings.quality}", style = MaterialTheme.typography.titleMedium)
+    val qualityLabel = stringResource(R.string.quality)
+    Slider(settings.quality.toFloat(), { onChange(settings.copy(quality = it.roundToInt())) }, valueRange = 10f..100f,
+      steps = 89, enabled = settings.outputFormat != OutputFormat.PNG, modifier = Modifier.semantics { contentDescription = qualityLabel })
+    Text(stringResource(if (settings.outputFormat == OutputFormat.PNG) R.string.png_quality_help else R.string.quality_help),
+      style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    HorizontalDivider()
+    Text(stringResource(R.string.dimensions), style = MaterialTheme.typography.titleMedium)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+      ResizeMode.entries.forEach { mode -> FilterChip(settings.resizeMode == mode, { onChange(settings.copy(resizeMode = mode)) },
+        label = { Text(stringResource(when (mode) { ResizeMode.ORIGINAL -> R.string.keep_original; ResizeMode.PERCENTAGE -> R.string.percentage; ResizeMode.CUSTOM -> R.string.custom_size })) }) }
     }
     when (settings.resizeMode) {
-      ResizeMode.ORIGINAL -> Text("Keeps the original dimensions when memory allows.")
+      ResizeMode.ORIGINAL -> Unit
       ResizeMode.PERCENTAGE -> {
-        Text("${settings.resizePercent}% of original width and height")
-        Slider(
-          value = settings.resizePercent.toFloat(),
-          onValueChange = { onResizePercentChange(it.roundToStep()) },
-          valueRange = 10f..100f,
-          steps = 8,
-        )
+        Text(stringResource(R.string.percent_dimensions, settings.resizePercent))
+        val dimensionLabel = stringResource(R.string.dimensions)
+        Slider(settings.resizePercent.toFloat(), { onChange(settings.copy(resizePercent = it.roundToInt())) }, valueRange = 10f..100f, steps = 89, modifier = Modifier.semantics { contentDescription = dimensionLabel })
       }
-
       ResizeMode.CUSTOM -> {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          OutlinedTextField(
-            value = settings.customWidth,
-            onValueChange = onCustomWidthChange,
-            modifier = Modifier.weight(1f),
-            label = { Text("Width") },
-            singleLine = true,
-          )
-          OutlinedTextField(
-            value = settings.customHeight,
-            onValueChange = onCustomHeightChange,
-            modifier = Modifier.weight(1f),
-            label = { Text("Height") },
-            singleLine = true,
-          )
-        }
+        OutlinedTextField(settings.customWidth, { onChange(settings.copy(customWidth = it)) }, Modifier.fillMaxWidth(),
+          label = { Text(stringResource(R.string.width_pixels)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+          keyboardActions = KeyboardActions(onDone = { finishEditing() }), singleLine = true, isError = !dimensionsValid)
+        OutlinedTextField(settings.customHeight, { onChange(settings.copy(customHeight = it)) }, Modifier.fillMaxWidth(),
+          label = { Text(stringResource(R.string.height_pixels)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+          keyboardActions = KeyboardActions(onDone = { finishEditing() }), singleLine = true, isError = !dimensionsValid)
+        SettingSwitch(stringResource(R.string.preserve_aspect), null, settings.preserveAspectRatio) { onChange(settings.copy(preserveAspectRatio = it)) }
+        if (!dimensionsValid) Text(stringResource(R.string.resize_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
       }
     }
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-      Text("Preserve aspect ratio")
-      Switch(checked = settings.preserveAspectRatio, onCheckedChange = onPreserveChange)
-    }
+    Text(stringResource(R.string.memory_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }
 
 @Composable
-fun SettingsFormatCard(settings: CompressionSettings, onFormatChange: (OutputFormat) -> Unit) {
-  SectionCard {
-    Text(
-      "Convert format",
-      style = MaterialTheme.typography.titleMedium,
-      fontWeight = FontWeight.Bold
-    )
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      OutputFormat.entries.forEach { format ->
-        FilterChip(
-          selected = settings.outputFormat == format,
-          onClick = { onFormatChange(format) },
-          label = { Text(format.label) },
-        )
-      }
+fun SettingSwitch(title: String, body: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+  Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(checked, role = Role.Switch, onValueChange = onChange),
+    horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+      Text(title, style = MaterialTheme.typography.titleSmall)
+      if (body != null) Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    if (settings.outputFormat == OutputFormat.PNG) {
-      Text("PNG keeps sharp edges and transparency. Its quality slider has less effect on file size.")
-    }
+    Switch(checked, onCheckedChange = null)
   }
+}
+
+@Composable
+private fun finishNumericEntry(): () -> Unit {
+  val focus = LocalFocusManager.current
+  val keyboard = LocalSoftwareKeyboardController.current
+  return { focus.clearFocus(); keyboard?.hide() }
 }

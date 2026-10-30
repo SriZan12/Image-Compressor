@@ -1,351 +1,166 @@
 package com.example.imagecompressor.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import com.example.imagecompressor.data.model.CompressedImage
-import com.example.imagecompressor.data.model.calculateReductionPercent
-import com.example.imagecompressor.data.model.toReadableSize
-import com.example.imagecompressor.theme.FigmaUi
-import com.example.imagecompressor.ui.components.EmptyState
-import com.example.imagecompressor.ui.components.FigmaCard
-import com.example.imagecompressor.ui.components.FigmaPrimaryButton
-import com.example.imagecompressor.ui.components.OutlinedPillButton
-import com.example.imagecompressor.ui.components.PrivacyBadge
-import com.example.imagecompressor.ui.components.StatCard
+import com.example.imagecompressor.R
+import com.example.imagecompressor.data.model.*
+import com.example.imagecompressor.theme.LocalStatusColors
+import com.example.imagecompressor.theme.Space
+import com.example.imagecompressor.ui.components.*
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
-import kotlin.math.roundToInt
+import kotlin.math.abs
 
 @Composable
-fun ResultsScreen(
-    state: ImageCompressorUiState,
-    modifier: Modifier = Modifier,
-    onSave: (CompressedImage) -> Unit,
-    onSaveAll: () -> Unit,
-    onShare: (CompressedImage) -> Unit,
-    onShareAll: () -> Unit,
-    onCompare: (CompressedImage) -> Unit,
-    onStartOver: () -> Unit,
-) {
-  if (state.isCompressing) {
-    CompressionProgressScreen(state = state, modifier = modifier)
-    return
-  }
-
-  val totalBefore = state.compressedImages.sumOf { it.original.sizeBytes }
-  val totalAfter = state.compressedImages.sumOf { it.compressedSizeBytes }
-  val reduction = calculateReductionPercent(totalBefore, totalAfter)
-
-  Column(modifier = modifier.fillMaxSize().background(FigmaUi.Background)) {
-    if (state.compressedImages.isEmpty()) {
-      EmptyState(
-        title = "No results yet",
-        body = "Compression did not produce any files. Go back and try a different image.",
-        modifier = Modifier.weight(1f),
-      )
-    } else {
-      LazyColumn(
-        modifier = Modifier.weight(1f),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-      ) {
-        item {
-          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-            Box(
-              modifier = Modifier.size(64.dp).clip(CircleShape).background(FigmaUi.Green),
-              contentAlignment = Alignment.Center,
-            ) {
-              Text("✓", color = FigmaUi.GreenDark, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(16.dp))
-            Text("Compression Complete!", color = FigmaUi.Ink, fontSize = 24.sp, lineHeight = 32.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(4.dp))
-            PrivacyBadge(text = "On-Device Processing", compact = true)
-          }
+fun ResultsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSaveAll: () -> Unit,
+  onShareAll: () -> Unit, onCompare: (CompressedImage) -> Unit, onStartOver: () -> Unit, onCancel: () -> Unit, onRetry: () -> Unit) {
+  if (state.isCompressing) { CompressionProgressScreen(state, modifier, onCancel); return }
+  val images = state.compressedImages
+  val before = if (images.all { it.original.sizeBytes > 0 }) images.sumOf { it.original.sizeBytes } else 0L
+  val after = images.sumOf { it.compressedSizeBytes }
+  val retry = state.batch?.items.orEmpty().filter { it.canRetry }
+  val needsReview = retry.isNotEmpty() || images.any { it.targetSizeStatus == TargetSizeStatus.UNMET }
+  AdaptiveActionScreen(modifier, hasActions = images.isNotEmpty(), primary = { wide ->
+    if (images.isEmpty()) EmptyState(stringResource(R.string.no_results), stringResource(R.string.no_results_body))
+    else Column(if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.section)) {
+      if (!wide) SavingsSummary(before, after)
+      if (images.size > 1) {
+        if (!wide) BatchSizes(before, after)
+        Text(stringResource(R.string.previewing_photo, images.first().original.displayName), style = MaterialTheme.typography.titleSmall)
+      }
+      ComparisonViewer(images.first(), if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth(), expanded = wide)
+    }
+  }, detail = { wide, inlineActions ->
+    Column(verticalArrangement = Arrangement.spacedBy(Space.section)) {
+      if (wide || needsReview || images.isEmpty()) PageTitle(stringResource(when {
+        state.batch?.status == BatchStatus.CANCELLED -> R.string.results_cancelled
+        state.batch?.status == BatchStatus.INTERRUPTED -> R.string.results_interrupted
+        needsReview -> R.string.results_review
+        else -> R.string.results_ready
+      }))
+      if (images.isNotEmpty()) {
+        if (wide) {
+          SavingsSummary(before, after)
+          if (images.size > 1) BatchSizes(before, after)
         }
-
-        item {
-          FigmaCard(shape = RoundedCornerShape(12.dp), padding = 24.dp) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Column {
-                Text(
-                  "Total Before",
-                  color = FigmaUi.Body,
-                  fontSize = 14.sp,
-                  lineHeight = 20.sp,
-                  fontWeight = FontWeight.Medium
-                )
-                Text(
-                  totalBefore.toReadableSize(),
-                  color = FigmaUi.Ink,
-                  fontSize = 22.sp,
-                  lineHeight = 28.sp,
-                  fontWeight = FontWeight.Bold
-                )
-              }
-              Box(modifier = Modifier.height(40.dp).width(1.dp).background(FigmaUi.Border))
-              Column(horizontalAlignment = Alignment.End) {
-                Text(
-                  "Total After",
-                  color = FigmaUi.Body,
-                  fontSize = 14.sp,
-                  lineHeight = 20.sp,
-                  fontWeight = FontWeight.Medium
-                )
-                Text(
-                  totalAfter.toReadableSize(),
-                  color = FigmaUi.Primary,
-                  fontSize = 22.sp,
-                  lineHeight = 28.sp,
-                  fontWeight = FontWeight.Bold
-                )
-              }
-            }
-            Box(
-              modifier =
-                Modifier
-                  .align(Alignment.CenterHorizontally)
-                  .clip(RoundedCornerShape(9999.dp))
-                  .background(FigmaUi.Primary)
-                  .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-              Text(
-                "$reduction% Saved",
-                color = Color.White,
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                fontWeight = FontWeight.Medium
-              )
-            }
-          }
-        }
-
-        item {
-          Text("Summary", color = FigmaUi.Body, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 4.dp))
-        }
-
-        items(state.compressedImages, key = { it.outputFilePath }) { image ->
-          ResultCard(
-            image = image,
-            onSave = { onSave(image) },
-            onShare = { onShare(image) },
-            onCompare = { onCompare(image) },
-          )
-        }
-
-        item {
-          Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
-            FigmaPrimaryButton(
-              text = if (state.isSaving) "Saving..." else "Save to Gallery",
-              onClick = onSaveAll,
-              enabled = !state.isSaving
-            )
-            OutlinedPillButton(
-              text = "Share All",
-              leading = "↗",
-              onClick = onShareAll,
-              modifier = Modifier.fillMaxWidth().height(56.dp)
-            )
-            TextButton(onClick = onStartOver, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp)) {
-              Text("Compress More", color = FigmaUi.Body, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
-            }
-          }
-        }
-
-        item {
-          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)) {
-            Text("Images were never uploaded.", color = FigmaUi.Muted, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp)
-          }
+        if (state.batch != null) Text(pluralStringResource(R.plurals.finished_count, state.batch.items.size, images.size, state.batch.items.size),
+          style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        inlineActions()
+        val anySaved = images.any { it.savedUri != null }
+        if (anySaved) Notice(stringResource(R.string.saved_location), success = true)
+        if (images.any { it.savedUri == null }) Text(stringResource(R.string.retained_hint), style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant)
+        state.saveErrors.values.distinct().forEach { Notice(it, error = true) }
+        if (images.size == 1) PhotoDetails(images.first())
+        else {
+          Text(stringResource(R.string.batch_details), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+          images.forEach { image -> ResultRow(image) { onCompare(image) } }
         }
       }
+      retry.forEach { item -> SectionCard {
+        Text(item.image.displayName, style = MaterialTheme.typography.titleSmall)
+        Notice(item.error ?: stringResource(R.string.no_results_body), error = item.status == ItemStatus.FAILED)
+      } }
+      if (retry.isNotEmpty()) {
+        ActionButton(stringResource(R.string.retry_remaining), onRetry, Modifier.fillMaxWidth(), R.drawable.ic_restart_alt,
+          enabled = !state.isSaving, secondary = images.isNotEmpty())
+        Text(stringResource(R.string.retry_settings), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+      ActionButton(stringResource(R.string.new_photos), onStartOver, Modifier.fillMaxWidth(), R.drawable.ic_add_photo_alternate,
+        enabled = !state.isSaving, secondary = images.isNotEmpty() || retry.isNotEmpty())
+    }
+  }, actions = {
+    if (images.isNotEmpty()) SaveShareActions(images.size, images.all { it.savedUri != null }, state.isSaving, onSaveAll, onShareAll)
+  })
+}
+
+@Composable
+fun SavingsSummary(before: Long, after: Long) {
+  val difference = before - after
+  Column(verticalArrangement = Arrangement.spacedBy(Space.sm)) {
+    if (before > 0 && difference != 0L) {
+      Text(abs(difference).toReadableSize(), style = MaterialTheme.typography.displayMedium,
+        color = if (difference > 0) LocalStatusColors.current.success else MaterialTheme.colorScheme.onSurface)
+      Text(stringResource(if (difference > 0) R.string.saved_space else R.string.larger_space), style = MaterialTheme.typography.bodyLarge)
+    }
+    StatusPill(describeSizeChange(before, after), success = before > after && before > 0,
+      icon = if (before > after && before > 0) R.drawable.ic_check_circle else R.drawable.ic_info)
+  }
+}
+
+@Composable
+fun SaveShareActions(count: Int, allSaved: Boolean, isSaving: Boolean, onSave: () -> Unit, onShare: () -> Unit) {
+  ResponsiveActions(primary = { ActionButton(stringResource(when {
+    isSaving -> R.string.saving; allSaved -> R.string.saved; count > 1 -> R.string.save_all; else -> R.string.save_gallery
+  }), onSave, it, if (allSaved) R.drawable.ic_check else R.drawable.ic_download, enabled = !isSaving && !allSaved) },
+    secondary = { ActionButton(stringResource(if (count > 1) R.string.share_all else R.string.share), onShare, it, R.drawable.ic_share,
+      enabled = !isSaving, secondary = true) })
+}
+
+@Composable
+fun PhotoDetails(image: CompressedImage) {
+  SectionCard {
+    Text(stringResource(R.string.image_details), style = MaterialTheme.typography.titleMedium)
+    Text(image.original.displayName, style = MaterialTheme.typography.bodyMedium)
+    Text("${image.width} × ${image.height} · ${image.format.label}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    CompressionNotices(image)
+  }
+}
+
+@Composable
+private fun ResultRow(image: CompressedImage, onCompare: () -> Unit) {
+  Surface(onClick = onCompare, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    Column(Modifier.fillMaxWidth().padding(Space.lg), verticalArrangement = Arrangement.spacedBy(Space.md)) {
+      Row(horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
+        Photo(image.outputUri, null, Modifier.size(64.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+          Text(image.original.displayName, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+          Text("${image.original.sizeBytes.toReadableSize()} → ${image.compressedSizeBytes.toReadableSize()}", style = MaterialTheme.typography.bodySmall)
+        }
+        AppIcon(R.drawable.ic_chevron_right, description = stringResource(R.string.open_comparison, image.original.displayName))
+      }
+      StatusPill(describeSizeChange(image.original.sizeBytes, image.compressedSizeBytes), success = image.reductionPercent > 0)
+      if (image.targetSizeStatus != TargetSizeStatus.NOT_REQUESTED) CompressionNotices(image)
     }
   }
 }
 
 @Composable
-fun ResultCard(image: CompressedImage, onSave: () -> Unit, onShare: () -> Unit, onCompare: () -> Unit) {
-  FigmaCard(shape = RoundedCornerShape(12.dp), padding = 12.dp) {
-    Row(
-      horizontalArrangement = Arrangement.spacedBy(12.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      Box(
-        modifier =
-          Modifier
-            .size(104.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(FigmaUi.Surface)
-            .clickable(onClick = onCompare),
-      ) {
-        AsyncImage(
-          model = image.outputUri,
-          contentDescription = image.original.displayName,
-          modifier = Modifier.fillMaxSize(),
-          contentScale = ContentScale.Crop,
-        )
-        Box(
-          modifier =
-            Modifier
-              .align(Alignment.TopEnd)
-              .padding(8.dp)
-              .clip(RoundedCornerShape(8.dp))
-              .background(FigmaUi.Ink.copy(alpha = 0.82f))
-              .padding(horizontal = 8.dp, vertical = 2.dp),
-        ) {
-          Text(
-            "${image.original.sizeBytes.toReadableSize()} → ${image.compressedSizeBytes.toReadableSize()}",
-            color = FigmaUi.Background,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.Medium,
-          )
-        }
+fun CompressionProgressScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onCancel: () -> Unit) {
+  val current = state.batch?.items?.firstOrNull { it.status == ItemStatus.RUNNING }?.image
+    ?: state.selectedImages.getOrNull(state.progress.completed)
+  AdaptiveScreen(modifier, primary = { wide ->
+    if (current != null) Photo(current.uri, current.displayName,
+      if (wide) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(260.dp))
+  }, detail = {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.section)) {
+      PageTitle(stringResource(R.string.processing_title), stringResource(R.string.processing_body))
+      SectionCard {
+        Text(pluralStringResource(R.plurals.processing_count, state.progress.total, state.progress.completed, state.progress.total), style = MaterialTheme.typography.titleMedium)
+        LinearProgressIndicator(progress = { state.progress.fraction.coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+        current?.let { Text(stringResource(R.string.processing_item, it.displayName), style = MaterialTheme.typography.bodyMedium) }
       }
-      Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(
-          image.original.displayName,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          color = FigmaUi.Ink,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          "${image.reductionPercent}% smaller • ${image.width} x ${image.height} • ${image.format.label}",
-          color = FigmaUi.Body,
-          fontSize = 12.sp,
-          lineHeight = 16.sp
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          TextButton(onClick = onCompare) { Text("Compare", color = FigmaUi.Primary) }
-          TextButton(onClick = onShare) { Text("Share", color = FigmaUi.Primary) }
-          TextButton(onClick = onSave, enabled = image.savedUri == null) {
-            Text(
-              if (image.savedUri == null) "Save" else "Saved",
-              color = if (image.savedUri == null) FigmaUi.Primary else FigmaUi.Muted
-            )
-          }
-        }
-      }
+      ActionButton(stringResource(if (state.isCancelling) R.string.cancelling else R.string.cancel_compression), onCancel,
+        Modifier.fillMaxWidth(), R.drawable.ic_close, enabled = !state.isCancelling, secondary = true)
+      Text(stringResource(R.string.cancel_help), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      PrivacyNote()
     }
-  }
+  })
 }
 
 @Composable
-fun CompressionProgressScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier) {
-  val fraction = state.progress.fraction.coerceIn(0f, 1f)
-  val percent = (fraction * 100).roundToInt()
-  val maxImageIndex = (state.selectedImages.size - 1).coerceAtLeast(0)
-  val currentIndex = state.progress.completed.coerceIn(0, maxImageIndex)
-  val currentCount = state.progress.completed.coerceIn(0, state.progress.total)
-  val current = state.selectedImages.getOrNull(currentIndex)
-
-  Box(modifier = modifier.fillMaxSize().background(FigmaUi.Background)) {
-    Box(
-      modifier =
-        Modifier
-          .align(Alignment.Center)
-          .size(500.dp)
-          .clip(CircleShape)
-          .background(FigmaUi.Primary.copy(alpha = 0.08f))
-    )
-    Column(
-      modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 56.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-    ) {
-      Box(contentAlignment = Alignment.Center, modifier = Modifier.size(256.dp)) {
-        CircularProgressIndicator(
-          progress = { fraction },
-          modifier = Modifier.size(256.dp),
-          color = FigmaUi.Primary,
-          trackColor = Color(0xFFD7E2EA),
-          strokeWidth = 12.dp,
-        )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          Text("$percent%", color = FigmaUi.Primary, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-1.425f).sp)
-          Text("COMPLETE", color = FigmaUi.Body, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Medium)
-        }
-      }
-      Spacer(Modifier.height(48.dp))
-      Text(
-        "Compressing your images\nlocally...",
-        color = FigmaUi.Ink,
-        fontSize = 24.sp,
-        lineHeight = 32.sp,
-        textAlign = TextAlign.Center,
-      )
-      Spacer(Modifier.height(8.dp))
-      Text(
-        "Processing ${current?.displayName ?: "image"} ($currentCount of ${state.progress.total})",
-        color = FigmaUi.Body,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.5.sp,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      Spacer(Modifier.height(32.dp))
-      Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        StatCard(
-          label = "Completed",
-          value = "${state.progress.completed}/${state.progress.total}",
-          tone = FigmaUi.Green,
-          modifier = Modifier.weight(1f),
-        )
-        StatCard(
-          label = "Status",
-          value = "~working",
-          tone = FigmaUi.SurfaceSoft,
-          modifier = Modifier.weight(1f),
-        )
-      }
-    }
-    Box(
-      modifier =
-        Modifier
-          .align(Alignment.BottomCenter)
-          .padding(16.dp)
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(8.dp))
-          .background(Color(0xFF2E3135))
-          .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-      Text("Your images never leave your device.", color = Color(0xFFEFF0F7), fontSize = 14.sp, lineHeight = 20.sp)
-    }
+private fun BatchSizes(before: Long, after: Long) {
+  Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+    Text(stringResource(R.string.batch_original_size, before.toReadableSize()), style = MaterialTheme.typography.bodyMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(stringResource(R.string.batch_output_size, after.toReadableSize()), style = MaterialTheme.typography.titleMedium)
   }
 }

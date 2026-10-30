@@ -1,0 +1,86 @@
+name: Android validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host:
+    name: Host tests, lint, and APKs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/android-setup
+      - name: Validate benchmark reporting
+        run: |
+          python3 -m unittest discover -s tools/benchmark -p 'test_*.py' -v
+          python3 -m unittest discover -s tools/validation -p 'test_*.py' -v
+      - name: Run host checks and build test APKs
+        run: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-project" clean testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+      - name: Upload diagnostics and native renders
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: host-reports-${{ github.run_id }}
+          retention-days: 14
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/design/
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: debug-apks-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: app/build/outputs/apk/
+
+  device:
+    name: Android API ${{ matrix.api }} smoke checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [31, 35]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/android-setup
+      - name: Enable hardware acceleration on the disposable runner
+        run: |
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Run native workflow and accessibility checks
+        uses: ReactiveCircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-device" clean connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.example.imagecompressor.validation
+      - name: Require the expected tests to have executed
+        run: python3 tools/validation/check_device_results.py app/build/outputs/androidTest-results --api ${{ matrix.api }}
+      - name: Upload device reports even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: device-reports-api-${{ matrix.api }}-${{ github.run_id }}
+          retention-days: 14
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/

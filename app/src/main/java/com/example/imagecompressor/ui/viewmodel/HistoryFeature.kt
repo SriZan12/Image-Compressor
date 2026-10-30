@@ -2,26 +2,20 @@ package com.example.imagecompressor.ui.viewmodel
 
 import com.example.imagecompressor.data.ImageRepository
 import com.example.imagecompressor.data.local.CompressionHistoryEntity
+import com.example.imagecompressor.data.userMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-class HistoryFeature(
-  private val imageRepository: ImageRepository,
-  private val scope: CoroutineScope,
-  private val showMessage: (String) -> Unit,
-) {
-  fun deleteHistory(item: CompressionHistoryEntity) {
+class HistoryFeature(private val imageRepository: ImageRepository, private val scope: CoroutineScope,
+  private val showMessage: (String) -> Unit) {
+  fun deleteHistory(item: CompressionHistoryEntity) = remove { imageRepository.deleteHistory(item) }
+  fun clearHistory() = remove { imageRepository.clearHistory() }
+  private fun remove(action: suspend () -> Unit) {
     scope.launch {
-      runCatching { imageRepository.deleteHistory(item) }
-        .onFailure { showMessage(it.message ?: "Unable to remove this history item.") }
-    }
-  }
-
-  fun clearHistory() {
-    scope.launch {
-      runCatching { imageRepository.clearHistory() }
-        .onSuccess { showMessage("History cleared.") }
-        .onFailure { showMessage(it.message ?: "Unable to clear history.") }
+      try { action(); showMessage("Retained results removed. Gallery copies and originals were kept.") }
+      catch (cancelled: CancellationException) { throw cancelled }
+      catch (failure: Exception) { showMessage(userMessage(failure, "Unable to remove retained results. Try again.")) }
     }
   }
 }
