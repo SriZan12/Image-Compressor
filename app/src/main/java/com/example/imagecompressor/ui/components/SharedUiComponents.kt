@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -24,6 +26,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import coil.compose.AsyncImage
 import coil.memory.MemoryCache
@@ -32,8 +35,27 @@ import com.example.imagecompressor.theme.LocalStatusColors
 import com.example.imagecompressor.theme.Space
 
 @Composable
-fun AppIcon(@DrawableRes resource: Int, modifier: Modifier = Modifier, description: String? = null) {
-  Icon(painterResource(resource), contentDescription = description, modifier = modifier.size(24.dp))
+fun AppIcon(@DrawableRes resource: Int, modifier: Modifier = Modifier, description: String? = null, size: Dp = 24.dp) {
+  val artwork = when (resource) {
+    R.drawable.ic_shrink, R.drawable.ic_photo_library -> R.drawable.art_shrink
+    R.drawable.ic_history -> R.drawable.art_recent
+    R.drawable.ic_settings -> R.drawable.art_settings
+    else -> null
+  }
+  val sculpted = when (resource) {
+    R.drawable.ic_add_photo_alternate -> R.drawable.ic_soft_add_photo
+    R.drawable.ic_download -> R.drawable.ic_soft_save
+    R.drawable.ic_share -> R.drawable.ic_soft_share
+    R.drawable.ic_compare -> R.drawable.ic_soft_compare
+    R.drawable.ic_lock -> R.drawable.ic_soft_lock
+    else -> null
+  }
+  when {
+    artwork != null -> AppArtwork(artwork, resource, size, modifier.alpha(LocalContentColor.current.alpha), description)
+    sculpted != null -> Icon(painterResource(sculpted), description,
+      modifier.size(size).alpha(LocalContentColor.current.alpha), tint = Color.Unspecified)
+    else -> Icon(painterResource(resource), description, modifier.size(size))
+  }
 }
 
 @Composable
@@ -159,7 +181,7 @@ fun Notice(message: String, modifier: Modifier = Modifier, error: Boolean = fals
 @Composable
 fun PrivacyNote(modifier: Modifier = Modifier) {
   Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.sm), verticalAlignment = Alignment.CenterVertically) {
-    Icon(painterResource(R.drawable.ic_lock), null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    AppIcon(R.drawable.ic_lock, size = 20.dp)
     Text(stringResource(R.string.private_body), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }
@@ -168,7 +190,9 @@ fun PrivacyNote(modifier: Modifier = Modifier) {
 fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, @DrawableRes icon: Int = R.drawable.ic_photo_library) {
   Column(modifier.fillMaxWidth().padding(vertical = Space.xl), horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(Space.lg)) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
+    if (icon == R.drawable.ic_photo_library || icon == R.drawable.ic_history)
+      AppIcon(icon, size = 96.dp)
+    else Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
       Icon(painterResource(icon), null, Modifier.padding(24.dp).size(40.dp), tint = MaterialTheme.colorScheme.primary)
     }
     Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })

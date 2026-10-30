@@ -135,7 +135,7 @@ internal fun AppChrome(screen: AppScreen, snackbar: SnackbarHostState = remember
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
         Spacer(Modifier.height(20.dp))
         destinations.forEach { (destination, icon, label) ->
-          NavigationRailItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon) },
+          NavigationRailItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon, size = 36.dp) },
             label = { Text(stringResource(label)) }, enabled = navigationEnabled)
           Spacer(Modifier.height(Space.lg))
         }
@@ -147,7 +147,7 @@ internal fun AppChrome(screen: AppScreen, snackbar: SnackbarHostState = remember
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
             .heightIn(min = 64.dp).padding(horizontal = Space.md, vertical = Space.xs),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
-            if (root) AppIcon(R.drawable.ic_shrink, modifier = Modifier.padding(Space.md))
+            if (root) AppIcon(R.drawable.ic_shrink, modifier = Modifier.padding(Space.sm), size = 40.dp)
             else IconButton(onBack, enabled = navigationEnabled) { AppIcon(R.drawable.ic_arrow_back, description = stringResource(R.string.back)) }
             Text(stringResource(screen.titleResource()), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).semantics { heading() })
           }
@@ -155,7 +155,7 @@ internal fun AppChrome(screen: AppScreen, snackbar: SnackbarHostState = remember
           if (root && !rail && LocalDensity.current.fontScale > 1.3f) LargeTextNavigation(screen, onNavigate, navigationEnabled)
           else if (root && !rail) NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
             destinations.forEach { (destination, icon, label) ->
-              NavigationBarItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon) },
+              NavigationBarItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon, size = 36.dp) },
                 label = { Text(stringResource(label)) }, enabled = navigationEnabled)
             }
           }

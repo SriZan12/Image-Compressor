@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.theme.Space
+import com.example.imagecompressor.ui.components.AppIcon
 
 /** Shown only while real initialization runs; Android provides the cold-start splash. */
 @Composable
@@ -23,7 +24,7 @@ fun SplashScreen() {
   Box(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.Center) {
   Column(Modifier.widthIn(max = 480.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(Space.section), horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.spacedBy(Space.section, Alignment.CenterVertically)) {
-    Icon(painterResource(R.drawable.ic_shrink), null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.primary)
+    AppIcon(R.drawable.ic_shrink, size = 96.dp)
     Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge)
     Text(stringResource(R.string.preparing), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
       modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })

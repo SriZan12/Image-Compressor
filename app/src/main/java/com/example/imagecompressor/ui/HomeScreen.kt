@@ -19,9 +19,7 @@ fun HomeScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onS
   onReviewSelection: () -> Unit, onOpenHistory: () -> Unit) {
   ScreenColumn(modifier) {
     Spacer(Modifier.height(Space.xl))
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-      AppIcon(R.drawable.ic_add_photo_alternate, Modifier.padding(20.dp))
-    }
+    AppIcon(R.drawable.ic_shrink, size = 112.dp)
     PageTitle(stringResource(R.string.home_title), stringResource(R.string.home_body), large = true)
     Spacer(Modifier.height(Space.sm))
     if (state.selectedImages.isNotEmpty()) {

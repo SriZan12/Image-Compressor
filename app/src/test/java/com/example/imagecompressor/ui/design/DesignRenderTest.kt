@@ -595,8 +595,10 @@ class DesignRenderTest {
   private fun awaitPreviews() {
     compose.waitUntil(timeoutMillis = 10_000) {
       compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Loading preview"), useUnmergedTree = true)
-        .fetchSemanticsNodes().isEmpty()
+        .fetchSemanticsNodes().isEmpty() &&
+        compose.onAllNodesWithTag("artwork-loading", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
     }
+    compose.onAllNodesWithTag("artwork-error", useUnmergedTree = true).assertCountEquals(0)
     compose.waitForIdle()
   }
 

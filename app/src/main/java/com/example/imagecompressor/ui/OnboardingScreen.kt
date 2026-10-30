@@ -15,9 +15,7 @@ import com.example.imagecompressor.ui.components.*
 fun OnboardingScreen(modifier: Modifier = Modifier, onContinue: () -> Unit, onSkip: () -> Unit) {
   ScreenColumn(modifier) {
     Spacer(Modifier.height(Space.lg))
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-      AppIcon(R.drawable.ic_shrink, Modifier.padding(20.dp))
-    }
+    AppIcon(R.drawable.ic_shrink, size = 112.dp)
     Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium)
     PageTitle(stringResource(R.string.onboarding_title), stringResource(R.string.onboarding_body), large = true)
     Spacer(Modifier.height(Space.sm))

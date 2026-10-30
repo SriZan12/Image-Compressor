@@ -1,5 +1,8 @@
 # Shrink design system and adaptive UI
 
+The latest [soft 3D icon update](soft-icons.md) implements the user's sculpted-icon
+reference for the launcher, brand artwork, navigation, and principal actions.
+
 The current redesign starts with the [new six-step editor plan](editor-plan.md).
 See [Editor Step 1](editor-step-1.md) for Poppins, current app captures, component
 states, and validation, and [Editor Step 2](editor-step-2.md) for photo opening,
