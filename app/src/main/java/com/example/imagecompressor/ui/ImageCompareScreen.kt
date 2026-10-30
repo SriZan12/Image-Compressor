@@ -27,6 +27,7 @@ fun ImageCompareScreen(state: ImageCompressorUiState, modifier: Modifier = Modif
       if (image.savedUri != null) Notice(stringResource(R.string.saved_location), success = true)
       else Notice(stringResource(R.string.retained_hint))
       state.saveErrors[image.historyId]?.let { Notice(it, error = true) }
+      CompressionNotices(image)
       PhotoDetails(image)
     }
   }, actions = { SaveShareActions(1, image.savedUri != null, state.isSaving, { onSave(image) }, { onShare(image) }) })

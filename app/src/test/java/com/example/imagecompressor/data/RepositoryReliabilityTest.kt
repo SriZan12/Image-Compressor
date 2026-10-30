@@ -163,7 +163,7 @@ class RepositoryReliabilityTest {
     val batch = snapshot()
     assertEquals(1, batch.results.size)
     assertEquals(ItemStatus.FAILED, batch.items.last().status)
-    assertTrue(batch.items.last().error!!.contains("storage is full"))
+    assertTrue(batch.items.last().error!!.contains("another copy"))
     assertEquals(32L, OutputStore(context).bytesUsed())
     assertTrue(File(context.cacheDir, "compressed").listFiles().orEmpty().none { it.isFile })
   }

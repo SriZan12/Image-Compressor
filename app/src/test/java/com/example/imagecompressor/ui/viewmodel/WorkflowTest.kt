@@ -114,6 +114,58 @@ class WorkflowTest {
     assertTrue(state.value.message!!.contains("Photo unavailable"))
   }
 
+  @Test fun replacingPhotosKeepsTheCurrentWorkWhenCancelledOrUnreadable() = runTest {
+    val repo = FakeRepository().apply { inspect = { SelectionResult(emptyList(), listOf("Photo unavailable")) } }
+    val receipt = EditorPreview.Ready(output(1), CompressionSettings())
+    val initial = ImageCompressorUiState(AppScreen.HOME, selectedImages = listOf(image("1")),
+      editorRetained = receipt, editorImageId = image("1").id, isInitializing = false)
+    val state = MutableStateFlow(initial)
+    val feature = ImageSelectionFeature(state, repo, backgroundScope)
+    feature.addSelectedImages(emptyList(), replace = true)
+    runCurrent()
+    assertEquals(initial, state.value)
+    feature.addSelectedImages(listOf(image("missing").uri), replace = true)
+    runCurrent()
+    assertEquals(initial.selectedImages, state.value.selectedImages)
+    assertEquals(receipt, state.value.editorRetained)
+    assertEquals(AppScreen.HOME, state.value.screen)
+    assertEquals(0, repo.dismissCalls)
+    assertTrue(state.value.message!!.contains("Photo unavailable"))
+  }
+
+  @Test fun newSelectionReplacesOnlyAfterInspectionAndKeepsTheChosenSettings() = runTest {
+    val inspected = CompletableDeferred<SelectionResult>()
+    val repo = FakeRepository().apply { inspect = { inspected.await() } }
+    val settings = CompressionSettings(targetBytes = 500_000)
+    val state = MutableStateFlow(ImageCompressorUiState(AppScreen.RESULTS,
+      selectedImages = (1..30).map { image("$it") }, editorImageId = image("30").id,
+      compressedImages = listOf(output(1)), compressionSettings = settings, isInitializing = false))
+    val feature = ImageSelectionFeature(state, repo, backgroundScope)
+    feature.addSelectedImages(listOf(image("new").uri), replace = true)
+    runCurrent()
+    assertEquals(30, state.value.selectedImages.size)
+    assertTrue(state.value.isLoadingImages)
+    inspected.complete(SelectionResult(listOf(image("new")), emptyList()))
+    runCurrent()
+    assertEquals(listOf(image("new")), state.value.selectedImages)
+    assertEquals(image("new"), state.value.editorSource)
+    assertEquals(AppScreen.COMPRESSION_SETTINGS, state.value.screen)
+    assertEquals(settings, state.value.compressionSettings)
+    assertTrue(state.value.compressedImages.isEmpty())
+    assertEquals(1, repo.dismissCalls)
+  }
+
+  @Test fun removingThePreviewedPhotoFallsBackToARemainingPhoto() {
+    val state = MutableStateFlow(ImageCompressorUiState(AppScreen.PREVIEW,
+      selectedImages = listOf(image("one"), image("two")), editorImageId = image("two").id,
+      isInitializing = false))
+    val feature = ImageSelectionFeature(state, FakeRepository(), CoroutineScope(SupervisorJob()))
+    feature.removeSelectedImage(image("two"))
+    assertEquals(image("one"), state.value.editorSource)
+    feature.removeSelectedImage(image("one"))
+    assertNull(state.value.editorSource)
+  }
+
   @Test fun interruptedBatchOverridesStaleScreenAndRestoresItsSettingsAndResults() = runTest {
     val repo = FakeRepository()
     val batch = BatchSnapshot("batch", CompressionSettings(quality = 61), BatchStatus.INTERRUPTED,
@@ -202,7 +254,7 @@ class WorkflowTest {
   private class FakeRepository : ImageRepository {
     override val history = MutableStateFlow(emptyList<CompressionHistoryEntity>())
     override val batch = MutableStateFlow<BatchSnapshot?>(null)
-    var compressionCalls = 0; var quality = 0; var cancelled = false; var saveCalls = 0
+    var compressionCalls = 0; var quality = 0; var cancelled = false; var saveCalls = 0; var dismissCalls = 0
     var result: CompressedImage? = null
     var initializeFailure: Exception? = null
     var compress: suspend (List<SelectedImage>, CompressionSettings) -> Unit = { _, _ -> }
@@ -213,7 +265,7 @@ class WorkflowTest {
     override suspend fun inspectImages(uris: List<Uri>) = inspect(uris)
     override suspend fun compressImages(images: List<SelectedImage>, settings: CompressionSettings) { compressionCalls++; compress(images, settings) }
     override suspend fun retryBatch() { }
-    override suspend fun dismissBatch() { }
+    override suspend fun dismissBatch() { dismissCalls++ }
     override suspend fun saveToGallery(image: CompressedImage): CompressedImage { saveCalls++; return save(image) }
     override suspend fun getResult(id: Long) = result
     override suspend fun shareUri(id: Long): Uri = error("Not used")

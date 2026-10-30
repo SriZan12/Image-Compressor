@@ -32,6 +32,8 @@ interface ImageRepository {
   suspend fun initialize()
   suspend fun refreshAvailability()
   suspend fun inspectImages(uris: List<Uri>): SelectionResult
+  suspend fun retainPreview(image: CompressedImage): CompressedImage =
+    throw UnsupportedOperationException("This repository cannot retain temporary previews.")
   suspend fun compressImages(images: List<SelectedImage>, settings: CompressionSettings)
   suspend fun retryBatch()
   suspend fun dismissBatch()
@@ -127,6 +129,78 @@ class DefaultImageRepository(
       catch (failure: Exception) { errors += userMessage(failure, "Unable to read this image. Select it again.") }
     }
     SelectionResult(images, errors)
+  }
+
+  override suspend fun retainPreview(image: CompressedImage): CompressedImage = withContext(Dispatchers.IO) {
+    initialize()
+    storage.withLock {
+      currentCoroutineContext().ensureActive()
+      val destination = outputs.previewDestination(image)
+      val destinationUri = outputs.uri(destination).toString()
+      val existing = historyDao.findByOutput(destination.absolutePath, destinationUri)
+      if (existing != null) {
+        requireMatchingPreview(existing, image)
+        val available = reconcile(existing)
+        if (available.localPath != null) {
+          outputs.verifyPreviewCopy(destination, image)
+          return@withLock checkNotNull(result(available)).copy(verifiedSha256 = image.verifiedSha256)
+        }
+        if (available.savedPath != null)
+          return@withLock checkNotNull(result(available)).copy(verifiedSha256 = image.verifiedSha256)
+      }
+      var committed = false
+      try {
+        val retained = outputs.retainPreview(image)
+        currentCoroutineContext().ensureActive()
+        // Only the small durable commit is non-cancellable. The potentially large copy above can
+        // stop immediately; a cancelled dispatcher return below must still leave history usable.
+        val stored = withContext(NonCancellable) {
+          database.withTransaction {
+            val old = historyDao.findByOutput(destination.absolutePath, destinationUri)
+            val row = if (old != null) {
+              requireMatchingPreview(old, image)
+              old.copy(localPath = retained.outputFilePath, compressedUri = retained.outputUri.toString(),
+                availability = if (old.savedPath != null) "EXPORTED" else "RETAINED")
+                .also { historyDao.update(it) }
+            } else {
+              val new = CompressionHistoryEntity(createdAt = System.currentTimeMillis(),
+                displayName = retained.original.displayName, originalUri = retained.original.uri.toString(),
+                compressedUri = retained.outputUri.toString(), originalSizeBytes = retained.original.sizeBytes,
+                compressedSizeBytes = retained.compressedSizeBytes, width = retained.width, height = retained.height,
+                outputFormat = retained.format.name, localPath = retained.outputFilePath, availability = "RETAINED",
+                sourceWidth = retained.original.width, sourceHeight = retained.original.height,
+                sourceFormat = retained.original.format, targetBytes = retained.targetBytes,
+                adjustments = retained.adjustments.joinToString(",") { it.name },
+                encodingAttempts = retained.encodingAttempts, encodingQuality = retained.encodingQuality)
+              new.copy(id = historyDao.insert(new))
+            }
+            row
+          }.also { committed = true }
+        }
+        checkNotNull(result(stored)).copy(verifiedSha256 = image.verifiedSha256)
+      } catch (failure: Throwable) {
+        if (!committed) withContext(NonCancellable) {
+          try {
+            // The move may have succeeded before URI construction or Room failed. Clean by the
+            // predetermined path, while preserving any result that actually reached the database.
+            if (historyDao.findByOutput(destination.absolutePath, destinationUri)?.localPath != destination.absolutePath)
+              outputs.delete(destination.absolutePath)
+          } catch (cleanup: Exception) { failure.addSuppressed(cleanup) }
+        }
+        throw failure
+      }
+    }
+  }
+
+  private fun requireMatchingPreview(stored: CompressionHistoryEntity, image: CompressedImage) {
+    if (stored.originalUri != image.original.uri.toString() || stored.originalSizeBytes != image.original.sizeBytes ||
+      stored.sourceWidth != image.original.width || stored.sourceHeight != image.original.height ||
+      stored.sourceFormat != image.original.format || stored.compressedSizeBytes != image.compressedSizeBytes ||
+      stored.width != image.width || stored.height != image.height || stored.outputFormat != image.format.name ||
+      stored.targetBytes != image.targetBytes || stored.encodingQuality != image.encodingQuality ||
+      stored.encodingAttempts != image.encodingAttempts ||
+      stored.adjustments.split(',').filter { it.isNotEmpty() }.toSet() != image.adjustments.map { it.name }.toSet())
+      throw IOException("This preview changed. Adjust the photo and try again before saving.")
   }
 
   override suspend fun compressImages(images: List<SelectedImage>, settings: CompressionSettings) = withContext(Dispatchers.IO) {
@@ -254,7 +328,9 @@ class DefaultImageRepository(
 
   override suspend fun shareUri(id: Long): Uri = withContext(Dispatchers.IO) {
     val image = getResult(id) ?: throw IOException("This result is unavailable. Compress the original again.")
-    val uri = image.savedUri ?: image.outputUri
+    // Gallery copies can be edited by other apps. Prefer our immutable retained candidate whenever
+    // it is still available, so sharing from the editor sends the bytes that were measured.
+    val uri = if (image.outputFilePath.isNotEmpty()) image.outputUri else image.savedUri ?: image.outputUri
     if (!gallerySaver.isReadable(uri)) throw IOException("This image can no longer be opened. Select the original again.")
     uri
   }

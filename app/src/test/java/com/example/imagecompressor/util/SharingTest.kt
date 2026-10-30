@@ -1,6 +1,7 @@
 package com.example.imagecompressor.util
 
 import android.app.Application
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ContextWrapper
 import android.content.Intent
@@ -11,12 +12,27 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = Application::class)
 class SharingTest {
+  @Test fun aDestroyedActivityCallbackCannotLaunchTheShareSheetAfterRotation() {
+    val controller = Robolectric.buildActivity(Activity::class.java).setup()
+    controller.pause().stop().destroy()
+    assertTrue(controller.get().isDestroyed)
+    var launched = false
+    val context = object : ContextWrapper(controller.get()) {
+      override fun startActivity(intent: Intent) { launched = true }
+    }
+    var message: String? = null
+    ShareUtils.shareUris(context, listOf(Uri.parse("content://outputs/1"))) { message = it }
+    assertFalse(launched)
+    assertTrue(checkNotNull(message).contains("Tap Share again"))
+  }
+
   @Test fun grantsReadAccessForEverySharedUriWithoutWritePermission() {
     var chooser: Intent? = null
     val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {

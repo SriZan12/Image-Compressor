@@ -50,8 +50,10 @@ class CompressionSettingsFeature(
   }
 
   private fun updateSettings(block: CompressionSettings.() -> CompressionSettings) {
+    if (state.value.isSaving) return
     val updated = state.value.compressionSettings.block()
-    state.update { it.copy(compressionSettings = updated) }
+    if (updated == state.value.compressionSettings) return
+    state.update { it.copy(compressionSettings = updated, editorRetained = null, editorExportError = null) }
     rememberSettings(updated)
   }
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.memory.MemoryCache
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.CompressedImage
 import com.example.imagecompressor.data.model.toReadableSize
@@ -33,6 +35,7 @@ import com.example.imagecompressor.theme.Space
 import kotlin.math.roundToInt
 
 /** Both images share fit, zoom, and pan. Only the original's screen-space mask moves. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComparisonViewer(image: CompressedImage, modifier: Modifier = Modifier, expanded: Boolean = false) {
   var fraction by rememberSaveable(image.historyId) { mutableFloatStateOf(.5f) }
@@ -43,11 +46,16 @@ fun ComparisonViewer(image: CompressedImage, modifier: Modifier = Modifier, expa
   var originalLoaded by remember(image.original.uri) { mutableStateOf(false) }
   var outputLoaded by remember(image.outputUri) { mutableStateOf(false) }
   var outputMissing by remember(image.outputUri) { mutableStateOf(false) }
+  var originalPreviewKey by remember(image.original.uri) { mutableStateOf<MemoryCache.Key?>(null) }
+  var outputPreviewKey by remember(image.outputUri) { mutableStateOf<MemoryCache.Key?>(null) }
+  val originalRequest = rememberPreviewImageRequest(image.original.uri, size, originalPreviewKey)
+  val outputRequest = rememberPreviewImageRequest(image.outputUri, size, outputPreviewKey)
   val loading = (!originalLoaded && !originalMissing) || (!outputLoaded && !outputMissing)
   val previewState = stringResource(if (loading) R.string.loading_preview else if (outputMissing) R.string.preview_unavailable else R.string.preview_ready)
   val checker = MaterialTheme.colorScheme.onSurface.copy(alpha = .04f)
   val line = MaterialTheme.colorScheme.onSurface
   val description = stringResource(R.string.compare_slider)
+  val sliderInteractions = remember { MutableInteractionSource() }
   val position = stringResource(R.string.original_visible, (fraction * 100).roundToInt())
   fun constrain(value: Offset, scale: Float): Offset = Offset(
     value.x.coerceIn(-size.width * (scale - 1) / 2, size.width * (scale - 1) / 2),
@@ -70,19 +78,26 @@ fun ComparisonViewer(image: CompressedImage, modifier: Modifier = Modifier, expa
       val transform = Modifier.fillMaxSize().graphicsLayer {
         scaleX = zoom; scaleY = zoom; translationX = pan.x; translationY = pan.y
       }
-      AsyncImage(image.outputUri, stringResource(R.string.compressed), transform, contentScale = ContentScale.Fit,
-        onError = { outputMissing = true }, onSuccess = { outputMissing = false; outputLoaded = true })
-      if (!originalMissing) Box(Modifier.fillMaxSize().drawWithContent {
+      if (outputRequest != null) AsyncImage(outputRequest, stringResource(R.string.compressed), transform, contentScale = ContentScale.Fit,
+        onLoading = { outputMissing = false; outputLoaded = false },
+        onError = { outputMissing = true; outputLoaded = false }, onSuccess = {
+          outputMissing = false; outputLoaded = true; outputPreviewKey = it.result.memoryCacheKey
+        })
+      // Keep the original request attached after an error so a new request can recover in place.
+      Box(Modifier.fillMaxSize().drawWithContent {
         clipRect(right = this.size.width * fraction) { this@drawWithContent.drawContent() }
       }) {
-        AsyncImage(image.original.uri, stringResource(R.string.original), transform, contentScale = ContentScale.Fit,
-          onError = { originalMissing = true }, onSuccess = { originalLoaded = true })
+        if (originalRequest != null) AsyncImage(originalRequest, stringResource(R.string.original), transform, contentScale = ContentScale.Fit,
+          onLoading = { originalMissing = false; originalLoaded = false },
+          onError = { originalMissing = true; originalLoaded = false }, onSuccess = {
+            originalMissing = false; originalLoaded = true; originalPreviewKey = it.result.memoryCacheKey
+          })
       }
       if (originalLoaded && outputLoaded) Canvas(Modifier.fillMaxSize()) {
         drawLine(line.copy(alpha = .85f), Offset(this.size.width * fraction, 0f),
           Offset(this.size.width * fraction, this.size.height), 2.dp.toPx())
       }
-      if (loading) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+      if (loading) EditorPlaceholder(Modifier.matchParentSize())
       if (outputMissing) Text(stringResource(R.string.preview_unavailable), Modifier.padding(Space.page))
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -96,8 +111,12 @@ fun ComparisonViewer(image: CompressedImage, modifier: Modifier = Modifier, expa
         ComparisonSize(stringResource(R.string.compressed), image.compressedSizeBytes, alignEnd = true)
       }
     }
-    Slider(fraction, { fraction = it }, enabled = originalLoaded && outputLoaded,
-      modifier = Modifier.fillMaxWidth().semantics { contentDescription = description; stateDescription = position })
+    Slider(fraction, { fraction = it }, enabled = originalLoaded && outputLoaded, interactionSource = sliderInteractions,
+      thumb = { Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
+        SliderDefaults.Thumb(interactionSource = sliderInteractions, enabled = originalLoaded && outputLoaded)
+      } },
+      track = { SliderDefaults.Track(it, modifier = Modifier.height(4.dp)) },
+      modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = description; stateDescription = position })
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
       IconButton(onClick = { zoom = (zoom - .5f).coerceAtLeast(1f); pan = constrain(pan, zoom) }, enabled = zoom > 1f) {
         AppIcon(R.drawable.ic_zoom_out, description = stringResource(R.string.zoom_out))

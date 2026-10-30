@@ -1,6 +1,7 @@
 package com.example.imagecompressor.validation
 
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -11,11 +12,14 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.imagecompressor.ImageCompressorApplication
 import com.example.imagecompressor.MainActivity
 import com.example.imagecompressor.R
+import com.example.imagecompressor.data.model.CompressionSettings
 import com.example.imagecompressor.data.model.TargetSizeStatus
 import com.example.imagecompressor.ui.ImageCompressorViewModel
 import com.example.imagecompressor.ui.state.AppScreen
+import com.example.imagecompressor.ui.state.EditorPreview
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -28,7 +32,7 @@ import org.junit.runner.RunWith
 class NativeWorkflowTest {
   @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
-  @Test fun selectedPhotoCompressesSavesOnceAndSurvivesActivityRecreation() {
+  @Test fun automaticPreviewExportsExactBytesOnceAndKeepsEditorSavedAfterRecreation() {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
     val context = instrumentation.targetContext
     val repository = (context.applicationContext as ImageCompressorApplication).container.imageRepository
@@ -48,39 +52,60 @@ class NativeWorkflowTest {
       input.outputStream().use(source::copyTo)
     }
     val originalBytes = input.readBytes()
+    val unavailableInput = File(directory, "photo-unavailable.png")
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", input)
     try {
       compose.runOnUiThread {
         model.completeOnboarding()
+        model.updateCompressionSettings(CompressionSettings())
         // The system picker is outside this test; exercise its real URI handoff boundary.
         model.addSelectedImages(listOf(uri))
       }
       compose.waitUntil(15_000) { !model.uiState.value.isLoadingImages }
       assertEquals(1, model.uiState.value.selectedImages.size)
-      compose.onNodeWithText(context.getString(R.string.preset_limit)).performScrollTo().performClick()
+      compose.onNodeWithText(context.getString(R.string.editor_custom_limit)).performScrollTo().performClick()
+      compose.onNodeWithText("KB").performScrollTo().performClick()
       val limitField = compose.onNode(hasSetTextAction() and hasText(context.getString(R.string.size_limit)))
-      limitField.performScrollTo().performTextReplacement("0.05")
+      limitField.performScrollTo().performTextReplacement("50")
       limitField.performImeAction()
-      compose.onNodeWithText(context.getString(R.string.compress_photos)).performClick()
-      compose.waitUntil(30_000) { !model.uiState.value.isCompressing && model.uiState.value.compressedImages.size == 1 }
-      val result = model.uiState.value.compressedImages.single()
-      assertEquals(AppScreen.RESULTS, model.uiState.value.screen)
-      assertEquals(TargetSizeStatus.MET, result.targetSizeStatus)
-      assertTrue(result.compressedSizeBytes in 1..50_000)
-      val outputBytes = File(result.outputFilePath).readBytes()
-      assertEquals(result.compressedSizeBytes, outputBytes.size.toLong())
-      assertNotNull(BitmapFactory.decodeByteArray(outputBytes, 0, outputBytes.size)?.also { it.recycle() })
+      // Picking a limit prepares a real candidate automatically, without starting a retained batch.
+      compose.waitUntil(30_000) {
+        val current = model.uiState.value
+        val ready = current.editorPreview as? EditorPreview.Ready
+        ready != null && ready.settings == current.compressionSettings && ready.settings.targetBytes == 50_000L
+      }
+      val preview = (model.uiState.value.editorPreview as EditorPreview.Ready).image
+      assertEquals(AppScreen.COMPRESSION_SETTINGS, model.uiState.value.screen)
+      assertEquals(TargetSizeStatus.MET, preview.targetSizeStatus)
+      assertTrue(preview.compressedSizeBytes in 1..50_000)
+      assertEquals(0L, preview.historyId)
+      assertTrue(model.uiState.value.compressedImages.isEmpty())
+      compose.onNodeWithText(context.getString(R.string.compress_photos)).assertDoesNotExist()
+      val previewBytes = File(preview.outputFilePath).readBytes()
+      assertEquals(preview.compressedSizeBytes, previewBytes.size.toLong())
+      assertNotNull(BitmapFactory.decodeByteArray(previewBytes, 0, previewBytes.size)?.also { it.recycle() })
       assertArrayEquals(originalBytes, input.readBytes())
-      // Sharing must expose a readable content URI, never a raw private file path.
-      val shareUri = runBlocking { repository.shareUri(result.historyId) }
-      assertEquals("content", shareUri.scheme)
-      assertArrayEquals(outputBytes, context.contentResolver.openInputStream(shareUri)!!.use { it.readBytes() })
+      runBlocking {
+        assertTrue("Live preview must not add history", repository.history.first().isEmpty())
+        assertNull("Live preview must not create a batch", repository.batch.first())
+      }
 
+      // Only this test-owned source is moved. Save must still work from the measured candidate;
+      // reopening/re-encoding the source would fail. Restore it before recreating the activity.
+      assertTrue(input.renameTo(unavailableInput))
       compose.onNodeWithText(context.getString(R.string.save_gallery)).performClick()
-      compose.waitUntil(15_000) { !model.uiState.value.isSaving && model.uiState.value.compressedImages.singleOrNull()?.savedUri != null }
-      val saved = model.uiState.value.compressedImages.single()
+      compose.waitUntil(15_000) {
+        !model.uiState.value.isSaving && model.uiState.value.editorRetained?.image?.savedUri != null
+      }
+      val saved = checkNotNull(model.uiState.value.editorRetained).image
       val savedUri = checkNotNull(saved.savedUri)
-      assertArrayEquals(outputBytes, context.contentResolver.openInputStream(savedUri)!!.use { it.readBytes() })
+      assertEquals(AppScreen.COMPRESSION_SETTINGS, model.uiState.value.screen)
+      assertTrue(saved.historyId > 0)
+      assertEquals(preview.encodingAttempts, saved.encodingAttempts)
+      assertEquals(preview.encodingQuality, saved.encodingQuality)
+      assertArrayEquals(previewBytes, File(saved.outputFilePath).readBytes())
+      assertArrayEquals(previewBytes, context.contentResolver.openInputStream(savedUri)!!.use { it.readBytes() })
+      assertTrue(unavailableInput.renameTo(input))
       context.contentResolver.query(savedUri, arrayOf(MediaStore.Images.Media.RELATIVE_PATH, MediaStore.Images.Media.IS_PENDING), null, null, null)!!.use {
         assertTrue(it.moveToFirst())
         assertEquals("Pictures/Image Compressor/", it.getString(0))
@@ -90,13 +115,32 @@ class NativeWorkflowTest {
         runBlocking { repository.saveToGallery(saved).savedUri })
       compose.onNodeWithText(context.getString(R.string.saved)).assertIsNotEnabled()
 
+      // Exercise the editor's share handoff without opening an external chooser during the test.
+      val sharedUri = AtomicReference<Uri>()
+      compose.runOnUiThread { model.shareEditorPhoto { sharedUri.set(it) } }
+      compose.waitUntil(15_000) { sharedUri.get() != null && !model.uiState.value.isSaving }
+      val shareUri = checkNotNull(sharedUri.get())
+      assertEquals("content", shareUri.scheme)
+      assertArrayEquals(previewBytes, context.contentResolver.openInputStream(shareUri)!!.use { it.readBytes() })
+      runBlocking {
+        assertEquals(saved.historyId, repository.history.first().single().id)
+        assertNull("Save and Share must not start a batch", repository.batch.first())
+      }
+      assertEquals(AppScreen.COMPRESSION_SETTINGS, model.uiState.value.screen)
+      assertTrue(model.uiState.value.compressedImages.isEmpty())
+
       compose.activityRule.scenario.recreate()
       compose.runOnUiThread { model = ViewModelProvider(compose.activity)[ImageCompressorViewModel::class.java] }
-      compose.waitUntil(15_000) { !model.uiState.value.isInitializing && model.uiState.value.compressedImages.size == 1 }
-      assertEquals(AppScreen.RESULTS, model.uiState.value.screen)
-      assertEquals(savedUri, model.uiState.value.compressedImages.single().savedUri)
+      compose.waitUntil(15_000) {
+        !model.uiState.value.isInitializing && model.uiState.value.editorRetained?.image?.savedUri == savedUri
+      }
+      assertEquals(AppScreen.COMPRESSION_SETTINGS, model.uiState.value.screen)
+      assertEquals(saved.historyId, model.uiState.value.editorRetained?.image?.historyId)
+      compose.onNodeWithText(context.getString(R.string.saved)).assertIsDisplayed().assertIsNotEnabled()
+      assertEquals(1, runBlocking { repository.history.first().size })
       assertArrayEquals(originalBytes, input.readBytes())
     } finally {
+      if (unavailableInput.exists() && !input.exists()) unavailableInput.renameTo(input)
       // Remove only records/exports tied to this unique fixture, even after an assertion fails.
       runBlocking {
         val owned = repository.history.first().filter { it.originalUri == uri.toString() }

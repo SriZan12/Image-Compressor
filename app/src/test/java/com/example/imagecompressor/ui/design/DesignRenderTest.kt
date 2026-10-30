@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
@@ -49,6 +50,142 @@ import org.robolectric.annotation.GraphicsMode
 class DesignRenderTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun homeSeparatesContinuingFromChoosingNewPhotos() {
+    val photo = fixture()
+    var continued = false
+    var replaced = false
+    screen(AppScreen.HOME) { HomeScreen(state(AppScreen.HOME).copy(selectedImages = listOf(photo.original)), it,
+      { replaced = true }, { continued = true }, {}) }
+    compose.onNodeWithText("Continue · 1 photo").performClick()
+    compose.onNodeWithText("Choose new photos").performClick()
+    assertTrue(continued && replaced)
+    compose.onNodeWithText("Add photos").assertDoesNotExist()
+    capture("step5-home-phone")
+  }
+
+  @Test @Config(qualifiers = "w1280dp-h800dp-land-mdpi")
+  fun batchSampleCanChangeWithoutChangingTheSharedLimit() {
+    val photo = fixture()
+    val sources = batchSources(photo)
+    val settings = CompressionSettings(targetBytes = 500_000)
+    var selected by mutableStateOf(sources.first())
+    screen(AppScreen.COMPRESSION_SETTINGS, dark = true) {
+      CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(selectedImages = sources,
+        editorImageId = selected.id, compressionSettings = settings,
+        editorPreview = EditorPreview.Ready(photo.copy(original = selected, targetBytes = 500_000), settings)), it,
+        {}, {}, {}, onPreviewPhoto = { selected = it })
+    }
+    val second = compose.onNodeWithContentDescription("Preview photo 2 of 2, astronaut-smaller.jpg")
+    second.performClick().assertIsSelected()
+    compose.onNodeWithContentDescription("Preview photo 1 of 2, astronaut.png").assertIsNotSelected()
+    compose.onNodeWithText("Preview 2 of 2 · settings apply to every photo").assertIsDisplayed()
+    compose.onNodeWithText("500 KB").assertIsSelected()
+    compose.onNodeWithText("Prepare 2 photos").performScrollTo().assertIsEnabled()
+    capture("step5-batch-tablet-dark")
+    compose.onNodeWithText("Compare with original").performScrollTo().performClick()
+    compose.onNodeWithText("Close").performClick()
+    assertEquals(sources[1], selected)
+  }
+
+  @Test fun editorComparisonReopensAfterRestorationWhenTheFreshPreviewIsReady() {
+    val photo = fixture()
+    val settings = CompressionSettings()
+    var preview: EditorPreview by mutableStateOf(EditorPreview.Ready(photo, settings))
+    val restoration = StateRestorationTester(compose)
+    restoration.setContent { ImageCompressorTheme(dynamicColor = false) { Surface {
+      AppChrome(AppScreen.COMPRESSION_SETTINGS) {
+        CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(selectedImages = listOf(photo.original),
+          compressionSettings = settings, editorPreview = preview), it, {}, {}, {})
+      }
+    } } }
+    compose.onNodeWithText("Compare with original").performScrollTo().performClick()
+    compose.onNodeWithText("Close").assertIsDisplayed()
+    compose.runOnIdle { preview = EditorPreview.Updating() }
+    restoration.emulateSavedInstanceStateRestore()
+    compose.onNodeWithText("Close").assertDoesNotExist()
+    compose.runOnIdle { preview = EditorPreview.Ready(photo, settings) }
+    compose.onNodeWithText("Close").assertIsDisplayed().performClick()
+    compose.onNodeWithText("Save photo").assertExists()
+  }
+
+  @Test @Config(qualifiers = "w320dp-h640dp-mdpi")
+  fun largeTextSettingsNavigationAndThemeRowsHaveUnclippedLabels() {
+    screen(AppScreen.SETTINGS, fontScale = 2f) { SettingsScreen(state(AppScreen.SETTINGS), it, {}, {}, {}) }
+    capture("step5-navigation-large-text")
+    for (label in listOf("Home", "Recent", "Settings")) {
+      // Settings is also the page title; inspect each visible label independently.
+      compose.onAllNodesWithText(label, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action?.invoke(layouts)
+        layouts.forEach {
+          assertFalse("Navigation label $label clips vertically", it.didOverflowHeight)
+          // GetTextLayoutResult reconstructs centered paragraphs at the maximum constraint
+          // (280px here), even when the painted text node wraps to 78px. Check glyph width,
+          // not the reconstructed paragraph's alignment offset; allow pixel rounding.
+          val lineWidth = it.getLineRight(0) - it.getLineLeft(0)
+          assertTrue("Navigation label $label clips horizontally", lineWidth <= it.size.width + 1f)
+          assertEquals("Navigation words must stay intact", 1, it.lineCount)
+        }
+      }
+    }
+    for (label in listOf("System", "Light", "Dark", "Match phone colors")) {
+      compose.onNodeWithText(label).performScrollTo().assertIsDisplayed()
+      val bounds = compose.onNodeWithText(label).getUnclippedBoundsInRoot()
+      assertTrue(bounds.bottom - bounds.top >= 48.dp)
+    }
+    capture("step5-settings-large-text")
+  }
+
+  @Test @Config(qualifiers = "w480dp-h240dp-land-mdpi")
+  fun startupStatusRemainsReachableInAShortWindowWithLargeText() {
+    compose.setContent {
+      CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 2f)) {
+        ImageCompressorTheme(dynamicColor = false) { Surface { SplashScreen() } }
+      }
+    }
+    compose.onNodeWithText("Getting things ready…").performScrollTo().assertIsDisplayed()
+    capture("step5-startup-short-window")
+  }
+
+  @Test fun recentUnavailablePhotoHasARecoveryActionAndNamedItemActions() {
+    val photo = fixture()
+    val row = CompressionHistoryEntity(id = 1, createdAt = 1_700_000_000_000, displayName = "holiday.png",
+      originalUri = photo.original.uri.toString(), compressedUri = photo.outputUri.toString(),
+      originalSizeBytes = photo.original.sizeBytes, compressedSizeBytes = photo.compressedSizeBytes,
+      width = 512, height = 512, outputFormat = "JPEG", availability = "UNAVAILABLE")
+    var choose = false
+    screen(AppScreen.HISTORY) { HistoryScreen(state(AppScreen.HISTORY).copy(history = listOf(row)), it,
+      {}, {}, {}, { choose = true }) }
+    compose.onNodeWithContentDescription("Share holiday.png").assertIsNotEnabled()
+    compose.onNodeWithContentDescription("Remove holiday.png").assertHasClickAction()
+    compose.onNodeWithText("Choose new photos").performScrollTo().performClick()
+    assertTrue(choose)
+    capture("step5-recent-recovery")
+  }
+
+  @Test fun batchOverLimitWarningAndExactBytesRemainVisibleBeforeExport() {
+    val photo = fixture().copy(targetBytes = 1)
+    val second = photo.copy(historyId = 2, original = photo.original.copy(displayName = "second.png"))
+    screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo, second)),
+      it, {}, {}, {}, {}, {}, {}) }
+    compose.onNodeWithText("2 photos are still over the limit. Review them before saving or sharing.").assertIsDisplayed()
+    compose.onAllNodesWithText("Verified size: ${String.format(java.util.Locale.US, "%,d", photo.compressedSizeBytes)} bytes")[0].performScrollTo().assertIsDisplayed()
+    capture("step5-batch-review-phone")
+  }
+
+  @Test fun failedBatchOffersSizeAdjustmentEvenWhenNoPhotoSucceeded() {
+    val photo = fixture().original
+    val batch = BatchSnapshot("failed", CompressionSettings(), BatchStatus.COMPLETED,
+      listOf(BatchItem("one", photo, ItemStatus.FAILED, error = "Could not read this photo. Choose it again.")))
+    var adjusted = false
+    screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(batch = batch, selectedImages = listOf(photo)),
+      it, {}, {}, {}, {}, {}, {}, onAdjustSize = { adjusted = true }) }
+    compose.onNodeWithText("Try unfinished photos again").performScrollTo().assertIsEnabled()
+    compose.onNodeWithText("Try another size").performScrollTo().performClick()
+    assertTrue(adjusted)
+    compose.onNodeWithText("Save all").assertDoesNotExist()
+  }
+
   private fun screen(screen: AppScreen, dark: Boolean = false, fontScale: Float = 1f, content: @Composable (Modifier) -> Unit) {
     compose.setContent {
       CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
@@ -59,62 +196,61 @@ class DesignRenderTest {
 
   @Test fun homeShowsSelectionAndPrivateProcessing() {
     screen(AppScreen.HOME) { HomeScreen(state(AppScreen.HOME), it, {}, {}, {}) }
-    compose.onNodeWithText("Select photos").assertIsDisplayed().assertHasClickAction()
-    compose.onNodeWithText("Your photos stay on your device. Originals are always kept.").assertExists()
+    compose.onNodeWithText("Choose photos").assertIsDisplayed().assertHasClickAction()
+    compose.onNodeWithText("Only on your device. Your originals stay safe.").assertExists()
     capture("home-light")
   }
 
   @Test fun onboardingCanStartWithoutPagingThroughATour() {
     var started = false
     screen(AppScreen.ONBOARDING) { OnboardingScreen(it, { started = true }, {}) }
-    compose.onNodeWithText("Get started").performScrollTo().performClick()
+    compose.onNodeWithText("Choose photos").performScrollTo().performClick()
     assertTrue(started)
     capture("onboarding-light")
   }
 
-  @Test fun presetsHideAdvancedAndRejectInvalidUploadLimit() {
+  @Test fun batchPresetsHideAdvancedAndRejectInvalidUploadLimit() {
     val photo = fixture()
     var settings by mutableStateOf(CompressionSettings())
     var requested: CompressionSettings? = null
     screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(
-      selectedImages = listOf(photo.original), compressionSettings = settings), it, { settings = it }, { requested = settings }, {}) }
-    compose.onNodeWithText("Encoder quality", substring = true).assertDoesNotExist()
-    compose.onNodeWithText("Compress photos").assertIsDisplayed()
+      selectedImages = batchSources(photo), compressionSettings = settings), it, { settings = it }, { requested = settings }, {}) }
+    compose.onNodeWithText("Picture detail", substring = true).assertDoesNotExist()
+    compose.onNodeWithText("Prepare 2 photos").assertIsDisplayed()
     capture("presets-light")
-    compose.onNodeWithText("Under a size limit").performScrollTo().performClick()
-    val field = compose.onNode(hasSetTextAction() and hasText("Maximum size per photo"))
+    compose.onNodeWithText("Custom").performScrollTo().performClick()
+    val field = compose.onNode(hasSetTextAction() and hasText("Size limit"))
     field.performScrollTo().performTextReplacement("0")
-    compose.onNodeWithText("Compress photos").assertIsNotEnabled()
+    compose.onNodeWithText("Prepare 2 photos").assertIsNotEnabled()
     field.performScrollTo().performTextReplacement("0.5")
-    compose.onNodeWithText("Compress photos").assertIsDisplayed().assertIsEnabled().performClick()
+    compose.onNodeWithText("Prepare 2 photos").assertIsDisplayed().assertIsEnabled().performClick()
     assertEquals(500_000L, requested?.targetBytes)
   }
 
-  @Test fun comparisonSliderAndPinnedActionsAreAccessibleOnPhone() {
+  @Test fun resultsLeadWithActualSizeAndKeepComparisonOptional() {
     val photo = fixture()
-    var saved = false; var shared = false
+    var saved = false; var shared = false; var compared: CompressedImage? = null
     screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo)), it,
-      { saved = true }, { shared = true }, {}, {}, {}, {}) }
-    compose.onNodeWithText("Save to gallery").assertIsDisplayed().performClick()
+      { saved = true }, { shared = true }, { compared = it }, {}, {}, {}) }
+    compose.onNodeWithText("New size").assertIsDisplayed()
+    compose.onNodeWithText(photo.compressedSizeBytes.toReadableSize()).assertIsDisplayed()
+    compose.onNodeWithContentDescription("Before and after comparison").assertDoesNotExist()
+    compose.onNodeWithText("Save photo").assertIsDisplayed().performClick()
     compose.onNodeWithText("Share").assertIsDisplayed().performClick()
     assertTrue(saved && shared)
-    awaitPreviews()
-    val slider = compose.onNodeWithContentDescription("Before and after comparison")
-    slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(.75f)) }
-    assertEquals(.75f, slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, .001f)
-    compose.onNodeWithContentDescription("Zoom in").performScrollTo().performClick()
-    compose.onNodeWithText(" · 150%").assertExists()
-    compose.onNodeWithText("Fit", substring = true).performClick()
-    // Return to the savings headline for the review capture.
-    compose.onNodeWithText("smaller in total").performScrollTo()
     capture("results-light")
+    compose.onNodeWithText("Compare with original").performScrollTo().performClick()
+    assertEquals(photo, compared)
+    compose.onNodeWithText("512 × 512 · JPEG").assertDoesNotExist()
+    compose.onNodeWithText("Photo details").performScrollTo().performClick()
+    compose.onNodeWithText("512 × 512 · JPEG").performScrollTo().assertIsDisplayed()
   }
 
   @Test @Config(qualifiers = "w1280dp-h800dp-land-xhdpi")
   fun tabletShowsComparisonAndDetailsInSeparatePanes() {
     val photo = fixture()
     screen(AppScreen.IMAGE_COMPARE, dark = true) { ImageCompareScreen(state(AppScreen.IMAGE_COMPARE).copy(compareImage = photo), it, {}, {}) }
-    val imageBounds = compose.onNodeWithContentDescription("Compressed", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+    val imageBounds = compose.onNodeWithContentDescription("After", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
     val details = compose.onNodeWithText("Photo details").fetchSemanticsNode().boundsInRoot
     assertTrue("Details must sit to the right of the image", details.left >= imageBounds.right)
     compose.onNodeWithText("Share").assertIsDisplayed()
@@ -124,17 +260,17 @@ class DesignRenderTest {
   @Test @Config(qualifiers = "w320dp-h640dp-mdpi")
   fun narrowLargeTextKeepsActionsReachableWithoutHorizontalOverflow() {
     screen(AppScreen.HOME, fontScale = 2f) { HomeScreen(state(AppScreen.HOME), it, {}, {}, {}) }
-    compose.onNodeWithText("Select photos").performScrollTo().assertIsDisplayed()
-    assertInsideRoot(compose.onNodeWithText("Select photos"))
+    compose.onNodeWithText("Choose photos").performScrollTo().assertIsDisplayed()
+    assertInsideRoot(compose.onNodeWithText("Choose photos"))
     capture("home-large-text")
   }
 
   @Test @Config(qualifiers = "w640dp-h320dp-land-mdpi")
-  fun shortLandscapeSettingsScrollToThePrimaryAction() {
+  fun shortLandscapeBatchSettingsScrollToThePrimaryAction() {
     val photo = fixture()
-    screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(selectedImages = listOf(photo.original)), it, {}, {}, {}) }
-    compose.onNodeWithText("Compress photos").performScrollTo().assertIsDisplayed()
-    assertInsideRoot(compose.onNodeWithText("Compress photos"))
+    screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(selectedImages = batchSources(photo)), it, {}, {}, {}) }
+    compose.onNodeWithText("Prepare 2 photos").performScrollTo().assertIsDisplayed()
+    assertInsideRoot(compose.onNodeWithText("Prepare 2 photos"))
   }
 
   @Test fun darkSettingsExposeThemeAndDynamicColorSwitch() {
@@ -146,7 +282,7 @@ class DesignRenderTest {
     compose.onNodeWithText("Light").performClick()
     compose.onNodeWithText("Light").assertIsSelected()
     assertEquals(ThemePreference.LIGHT, selected)
-    compose.onNodeWithText("Use device colors").performClick()
+    compose.onNodeWithText("Match phone colors").performClick()
     assertFalse(dynamic)
   }
 
@@ -172,20 +308,20 @@ class DesignRenderTest {
     var retried = false
     screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(batch = batch, compressedImages = listOf(photo)), it, {}, {}, {}, {}, {}, { retried = true }) }
     compose.onNodeWithText("Pick up where you left off.").performScrollTo().assertIsDisplayed()
-    compose.onNodeWithText("Retry remaining photos").performScrollTo().performClick()
+    compose.onNodeWithText("Try unfinished photos again").performScrollTo().performClick()
     assertTrue(retried)
-    compose.onNodeWithText("Ready for what is next.").assertDoesNotExist()
+    compose.onNodeWithText("Ready to share").assertDoesNotExist()
   }
 
   @Test @Config(qualifiers = "w320dp-h800dp-mdpi")
   fun largeTextResultsStackSaveAndShareWithoutClipping() {
     val photo = fixture()
     screen(AppScreen.RESULTS, fontScale = 2f) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo)), it, {}, {}, {}, {}, {}, {}) }
-    val save = compose.onNodeWithText("Save to gallery").assertIsDisplayed()
-    val share = compose.onNodeWithText("Share").assertIsDisplayed()
+    val save = compose.onNodeWithText("Save photo").performScrollTo().assertIsDisplayed()
+    val share = compose.onNodeWithText("Share").performScrollTo().assertIsDisplayed()
     assertInsideRoot(save); assertInsideRoot(share)
     assertTrue(share.fetchSemanticsNode().boundsInRoot.top >= save.fetchSemanticsNode().boundsInRoot.bottom)
-    compose.onNodeWithContentDescription("Before and after comparison").performScrollTo().assertIsDisplayed()
+    compose.onNodeWithText("Compare with original").performScrollTo().assertIsDisplayed()
     capture("results-large-text")
   }
 
@@ -212,7 +348,7 @@ class DesignRenderTest {
     screen(AppScreen.RESULTS) { CompressionProgressScreen(state(AppScreen.RESULTS).copy(isCompressing = true,
       selectedImages = listOf(photo.original), progress = BatchProgress(0, 1)), it, { cancelled = true }) }
     compose.onNodeWithText("Completed photos are kept if you cancel.").assertExists()
-    compose.onNodeWithText("Cancel compression").performScrollTo().performClick()
+    compose.onNodeWithText("Stop").performScrollTo().performClick()
     assertTrue(cancelled)
     capture("progress-light")
   }
@@ -251,17 +387,18 @@ class DesignRenderTest {
     restoration.setContent { ImageCompressorTheme(dynamicColor = false) { Surface {
       Box(Modifier.width(width.dp).fillMaxHeight()) {
         AppChrome(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(
-          selectedImages = listOf(photo.original), compressionSettings = settings), it, { settings = it }, {}, {}) }
+          selectedImages = batchSources(photo), compressionSettings = settings), it, { settings = it }, {}, {}) }
       }
     } } }
-    val field = compose.onNode(hasSetTextAction() and hasText("Maximum size per photo"))
+    compose.onNodeWithText("Custom").performScrollTo().performClick()
+    val field = compose.onNode(hasSetTextAction() and hasText("Size limit"))
     field.performScrollTo().performTextReplacement("0")
     compose.runOnIdle { width = 600 }
     field.performScrollTo().assertTextContains("0")
-    compose.onNodeWithText("Compress photos").assertIsNotEnabled()
+    compose.onNodeWithText("Prepare 2 photos").assertIsNotEnabled()
     restoration.emulateSavedInstanceStateRestore()
     field.performScrollTo().assertTextContains("0")
-    compose.onNodeWithText("Compress photos").assertIsNotEnabled()
+    compose.onNodeWithText("Prepare 2 photos").assertIsNotEnabled()
     assertEquals(1_000_000L, settings.targetBytes) // Invalid text must not silently change the saved limit.
   }
 
@@ -270,8 +407,9 @@ class DesignRenderTest {
     val photo = fixture()
     var settings by mutableStateOf(CompressionSettings(targetBytes = 1_000_000))
     screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(
-      selectedImages = listOf(photo.original), compressionSettings = settings), it, { settings = it }, {}, {}) }
-    val field = compose.onNode(hasSetTextAction() and hasText("Maximum size per photo"))
+      selectedImages = batchSources(photo), compressionSettings = settings), it, { settings = it }, {}, {}) }
+    compose.onNodeWithText("Custom").performScrollTo().performClick()
+    val field = compose.onNode(hasSetTextAction() and hasText("Size limit"))
     field.performScrollTo().performTextReplacement("0.5")
     compose.runOnIdle {
       val keyboard = WindowInsetsCompat.Builder().setInsets(WindowInsetsCompat.Type.ime(), Insets.of(0, 0, 0, 300))
@@ -284,8 +422,8 @@ class DesignRenderTest {
     field.assertIsNotFocused()
     assertEquals(500_000L, settings.targetBytes)
     capture("size-limit-keyboard")
-    compose.onNodeWithText("Compress photos").performScrollTo().assertIsDisplayed()
-    assertTrue(compose.onNodeWithText("Compress photos").getUnclippedBoundsInRoot().bottom <= 500.dp)
+    compose.onNodeWithText("Prepare 2 photos").performScrollTo().assertIsDisplayed()
+    assertTrue(compose.onNodeWithText("Prepare 2 photos").getUnclippedBoundsInRoot().bottom <= 500.dp)
   }
 
   @Test @Config(qualifiers = "w320dp-h800dp-mdpi")
@@ -317,7 +455,7 @@ class DesignRenderTest {
       { selected = selected.filterNot { current -> current.id == it.id } }, {}) }
     compose.onNodeWithContentDescription("Remove astronaut.png").performClick()
     compose.onNodeWithText("No photos selected").assertIsDisplayed()
-    compose.onNodeWithText("Done").assertDoesNotExist()
+    compose.onNodeWithText("Choose size").assertDoesNotExist()
     compose.onNodeWithText("Add photos").assertIsEnabled().performClick()
     assertTrue(add)
   }
@@ -328,9 +466,10 @@ class DesignRenderTest {
     val second = photo.copy(historyId = 2, original = photo.original.copy(displayName = "second-photo.png"))
     var opened: CompressedImage? = null
     screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo, second)), it, {}, {}, { opened = it }, {}, {}, {}) }
-    compose.onNodeWithText("Batch after: ${(photo.compressedSizeBytes * 2).toReadableSize()}").assertIsDisplayed()
+    compose.onNodeWithText("Total size").assertIsDisplayed()
+    compose.onNodeWithText((photo.compressedSizeBytes * 2).toReadableSize()).assertIsDisplayed()
     compose.onNodeWithText("Preview: astronaut.png").assertIsDisplayed()
-    compose.onNodeWithText("Save all to gallery").assertIsDisplayed()
+    compose.onNodeWithText("Save all").assertIsDisplayed()
     compose.onNodeWithContentDescription("Compare second-photo.png").performScrollTo().performClick()
     assertEquals(2L, opened?.historyId)
     capture("batch-tablet")
@@ -341,7 +480,7 @@ class DesignRenderTest {
     var shared = false
     screen(AppScreen.IMAGE_COMPARE) { ImageCompareScreen(state(AppScreen.IMAGE_COMPARE).copy(compareImage = photo), it, {}, { shared = true }) }
     awaitPreviews()
-    compose.onNodeWithText("The original preview is unavailable. Select it again if you need to compare.").assertExists()
+    compose.onNodeWithText("The original is no longer available to compare. You can still save or share this copy.").assertExists()
     compose.onNodeWithContentDescription("Before and after comparison").assertIsNotEnabled()
     compose.onNodeWithText("Share").assertIsDisplayed().performClick()
     assertTrue(shared)
@@ -349,9 +488,9 @@ class DesignRenderTest {
 
   @Test fun swipingAnUnzoomedComparisonScrollsThePage() {
     val photo = fixture()
-    screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo)), it, {}, {}, {}, {}, {}, {}) }
+    screen(AppScreen.IMAGE_COMPARE) { ImageCompareScreen(state(AppScreen.IMAGE_COMPARE).copy(compareImage = photo), it, {}, {}) }
     awaitPreviews()
-    val image = compose.onNodeWithContentDescription("Compressed", useUnmergedTree = true)
+    val image = compose.onNodeWithContentDescription("After", useUnmergedTree = true)
     val before = image.getUnclippedBoundsInRoot().top
     image.performTouchInput { swipeUp() }
     val after = image.getUnclippedBoundsInRoot().top
@@ -359,7 +498,76 @@ class DesignRenderTest {
     compose.onNodeWithText("Share").assertIsDisplayed()
   }
 
+  @Test fun batchQuickSizeChoicesUseExactBytesAndRepairAnInvalidDraft() {
+    val photo = fixture()
+    var settings by mutableStateOf(CompressionSettings())
+    var requested: CompressionSettings? = null
+    screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(
+      selectedImages = batchSources(photo), compressionSettings = settings), it, { settings = it }, { requested = settings }, {}) }
+    compose.onNodeWithContentDescription("Photo detail").assertIsEnabled()
+    compose.onNodeWithText("Prepare 2 photos").performClick()
+    assertEquals(CompressionSettings(), requested)
+    compose.onNodeWithText("Custom").performScrollTo().performClick()
+    val field = compose.onNode(hasSetTextAction() and hasText("Size limit"))
+    field.performScrollTo().performTextReplacement("0")
+    compose.onNodeWithText("Prepare 2 photos").assertIsNotEnabled()
+    compose.onNodeWithText("200 KB").performScrollTo().performClick()
+    compose.onNodeWithText("200 KB").assertIsSelected()
+    compose.onNodeWithText("Custom").performScrollTo().performClick()
+    field.assertTextContains("0.2")
+    compose.onNodeWithText("KB").performScrollTo().performClick()
+    field.assertTextContains("200")
+    compose.onNodeWithText("Prepare 2 photos").assertIsDisplayed().performClick()
+    assertEquals(200_000L, requested?.targetBytes)
+    capture("size-limit-light")
+  }
+
+  @Test fun rememberedOptionsAreExplainedAndResetKeepsTheChosenLimit() {
+    val photo = fixture()
+    var settings by mutableStateOf(CompressionSettings(targetBytes = 200_000, outputFormat = OutputFormat.PNG, quality = 92))
+    screen(AppScreen.COMPRESSION_SETTINGS) { CompressionSettingsScreen(state(AppScreen.COMPRESSION_SETTINGS).copy(
+      selectedImages = listOf(photo.original), compressionSettings = settings), it, { settings = it }, {}, {}) }
+    compose.onNodeWithText("File type").assertDoesNotExist()
+    compose.onNodeWithText("Your saved choices are being used.").performScrollTo().assertIsDisplayed()
+    compose.onNodeWithText("Use recommended choices").performScrollTo().performClick()
+    assertEquals(CompressionSettings(targetBytes = 200_000), settings)
+    compose.onNodeWithText("Your saved choices are being used.").assertDoesNotExist()
+    compose.onNodeWithText("Advanced").performScrollTo().performClick()
+    compose.onNodeWithText("File type").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test fun unmetLimitIsVisibleWithoutOpeningDetailsAndOffersAnotherSize() {
+    val photo = fixture().copy(targetBytes = 1)
+    var changedSize = false
+    screen(AppScreen.RESULTS) { ResultsScreen(state(AppScreen.RESULTS).copy(compressedImages = listOf(photo)), it,
+      {}, {}, {}, {}, {}, {}, onAdjustSize = { changedSize = true }) }
+    compose.onNodeWithText("Still over your 1 B limit").assertIsDisplayed()
+    compose.onNodeWithText("We could not make this photo small enough. Try another size, or use a different photo.").assertIsDisplayed()
+    compose.onNodeWithText("Try another size").performScrollTo().performClick()
+    assertTrue(changedSize)
+    compose.onNodeWithText("Save photo").assertIsEnabled()
+  }
+
+  @Test fun comparisonSupportsSliderZoomAndResetOnPhone() {
+    val photo = fixture()
+    screen(AppScreen.IMAGE_COMPARE) { ImageCompareScreen(state(AppScreen.IMAGE_COMPARE).copy(compareImage = photo), it, {}, {}) }
+    awaitPreviews()
+    val slider = compose.onNodeWithContentDescription("Before and after comparison")
+    slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(.75f)) }
+    assertEquals(.75f, slider.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current, .001f)
+    compose.onNodeWithContentDescription("Zoom in").performScrollTo().performClick()
+    compose.onNodeWithText(" · 150%").assertExists()
+    compose.onNodeWithText("Reset view", substring = true).performClick()
+    compose.onNodeWithText(" · 100%").assertExists()
+    capture("compare-phone")
+  }
+
   private fun state(screen: AppScreen) = ImageCompressorUiState(screen, isInitializing = false)
+
+  /** Two real source URIs keep explicit batch preparation coverage scoped to the batch flow. */
+  private fun batchSources(photo: CompressedImage) = listOf(photo.original,
+    SelectedImage(photo.outputUri, "astronaut-smaller.jpg", photo.compressedSizeBytes,
+      photo.width, photo.height, photo.format.name))
 
   private fun fixture(): CompressedImage {
     val context = RuntimeEnvironment.getApplication()

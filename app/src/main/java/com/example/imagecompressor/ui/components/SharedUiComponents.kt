@@ -10,17 +10,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import coil.compose.AsyncImage
+import coil.memory.MemoryCache
 import com.example.imagecompressor.R
 import com.example.imagecompressor.theme.LocalStatusColors
 import com.example.imagecompressor.theme.Space
@@ -55,9 +61,9 @@ fun ActionButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
   }
   val sized = modifier.heightIn(min = 56.dp)
   if (secondary) OutlinedButton(onClick, sized, enabled = enabled,
-    contentPadding = PaddingValues(horizontal = Space.page, vertical = Space.lg), content = contents)
+    shape = MaterialTheme.shapes.medium, contentPadding = PaddingValues(horizontal = Space.page, vertical = Space.lg), content = contents)
   else Button(onClick, sized, enabled = enabled,
-    contentPadding = PaddingValues(horizontal = Space.page, vertical = Space.lg), content = contents)
+    shape = MaterialTheme.shapes.medium, contentPadding = PaddingValues(horizontal = Space.page, vertical = Space.lg), content = contents)
 }
 
 @Composable
@@ -99,14 +105,22 @@ fun ScreenColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope
 }
 
 @Composable
-fun Photo(model: Any?, description: String?, modifier: Modifier = Modifier, scale: ContentScale = ContentScale.Fit) {
+fun Photo(model: Any?, description: String?, modifier: Modifier = Modifier, scale: ContentScale = ContentScale.Fit,
+  shape: Shape = MaterialTheme.shapes.large) {
   var failed by remember(model) { mutableStateOf(false) }
   var loading by remember(model) { mutableStateOf(true) }
+  var cachedPlaceholder by remember(model) { mutableStateOf(false) }
+  var previousPreviewKey by remember(model) { mutableStateOf<MemoryCache.Key?>(null) }
+  var viewport by remember { mutableStateOf(IntSize.Zero) }
+  val request = rememberPreviewImageRequest(model, viewport, previousPreviewKey)
   val status = stringResource(if (loading) R.string.loading_preview else if (failed) R.string.preview_unavailable else R.string.preview_ready)
-  Box(modifier.semantics(mergeDescendants = true) { stateDescription = status }.clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
-    AsyncImage(model, description, modifier = Modifier.fillMaxSize(), contentScale = scale,
-      onError = { failed = true; loading = false }, onSuccess = { failed = false; loading = false })
-    if (loading) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+  Box(modifier.onSizeChanged { viewport = it }.semantics(mergeDescendants = true) { stateDescription = status }
+    .clip(shape).background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
+    if (request != null) AsyncImage(request, description, modifier = Modifier.fillMaxSize(), contentScale = scale,
+      onLoading = { failed = false; loading = true; cachedPlaceholder = it.painter != null },
+      onError = { failed = true; loading = false; cachedPlaceholder = false },
+      onSuccess = { failed = false; loading = false; previousPreviewKey = it.result.memoryCacheKey })
+    if (loading && !cachedPlaceholder) EditorPlaceholder(Modifier.matchParentSize())
     if (failed) Column(Modifier.padding(Space.lg), horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(Space.sm)) {
       AppIcon(R.drawable.ic_image)
@@ -157,9 +171,17 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier, @Draw
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
       Icon(painterResource(icon), null, Modifier.padding(24.dp).size(40.dp), tint = MaterialTheme.colorScheme.primary)
     }
-    Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+    Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.semantics { heading() })
     Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
   }
+}
+
+@Composable
+fun PhotoOpeningStatus() {
+  // Indeterminate work has no truthful percentage. Text also respects reduced motion.
+  Text(stringResource(R.string.editor_loading), style = MaterialTheme.typography.bodyMedium,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 }
 
 /** Keep the next actions in reach on phones, with inline actions in short windows and wide panes. */
@@ -168,7 +190,7 @@ fun AdaptiveActionScreen(modifier: Modifier = Modifier, hasActions: Boolean = tr
   detail: @Composable (Boolean, @Composable () -> Unit) -> Unit, actions: @Composable () -> Unit) {
   BoxWithConstraints(modifier.fillMaxSize()) {
     val wide = maxWidth >= (if (LocalDensity.current.fontScale > 1.5f) 1080.dp else 840.dp) && maxHeight >= 480.dp
-    val pinned = hasActions && !wide && maxHeight >= 480.dp
+    val pinned = hasActions && !wide && maxHeight >= 480.dp && LocalDensity.current.fontScale <= 1.3f
     Column(Modifier.fillMaxSize()) {
       AdaptiveScreen(Modifier.weight(1f), primary, detail = { twoPanes ->
         detail(twoPanes) { if (!pinned) actions() }

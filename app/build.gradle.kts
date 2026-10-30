@@ -37,6 +37,11 @@ android {
     testOptions.unitTests.isIncludeAndroidResources = true
     testOptions.unitTests.all {
       it.systemProperty("shrink.screenshots", layout.buildDirectory.dir("design").get().asFile.absolutePath)
+      it.systemProperty("shrink.preview.measure", providers.gradleProperty("previewMeasure").getOrElse("false"))
+      it.systemProperty("shrink.preview.label", providers.gradleProperty("previewLabel").getOrElse("local"))
+      it.systemProperty("shrink.preview.reports", layout.buildDirectory.dir("preview-performance").get().asFile.absolutePath)
+      // Coil retains its main dispatcher. Keep opt-in probes isolated from Compose's test Looper.
+      if (providers.gradleProperty("previewMeasure").getOrElse("false") == "true") it.forkEvery = 1
     }
     sourceSets.getByName("test").resources.directories.add("src/androidTest/assets")
     sourceSets.getByName("test").resources.directories.add("schemas")

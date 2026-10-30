@@ -21,8 +21,9 @@ import com.example.imagecompressor.ui.state.ImageCompressorUiState
 @Composable
 fun PreviewScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSelectMany: () -> Unit,
   onRemove: (SelectedImage) -> Unit, onContinue: () -> Unit) {
+  Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
   LazyVerticalGrid(GridCells.Adaptive(if (LocalDensity.current.fontScale > 1.5f) 240.dp else 156.dp),
-    modifier.fillMaxSize(), contentPadding = PaddingValues(Space.page), horizontalArrangement = Arrangement.spacedBy(Space.md),
+    Modifier.widthIn(max = 1000.dp).fillMaxSize(), contentPadding = PaddingValues(Space.page), horizontalArrangement = Arrangement.spacedBy(Space.md),
     verticalArrangement = Arrangement.spacedBy(Space.lg)) {
     item(span = { GridItemSpan(maxLineSpan) }) {
       PageTitle(if (state.selectedImages.isEmpty()) stringResource(R.string.empty_selection) else photoCount(state.selectedImages.size),
@@ -31,16 +32,16 @@ fun PreviewScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, 
     item(span = { GridItemSpan(maxLineSpan) }) {
       if (state.selectedImages.isEmpty()) ActionButton(stringResource(R.string.add_photos), onSelectMany,
         Modifier.fillMaxWidth(), R.drawable.ic_add_photo_alternate, enabled = !state.isLoadingImages)
-      else ResponsiveActions(primary = { ActionButton(stringResource(R.string.done), onContinue, it, R.drawable.ic_check,
+      else ResponsiveActions(primary = { ActionButton(stringResource(R.string.choose_size_action), onContinue, it, R.drawable.ic_arrow_forward,
         enabled = state.selectedImages.isNotEmpty() && !state.isLoadingImages) },
         secondary = { ActionButton(stringResource(R.string.add_photos), onSelectMany, it, R.drawable.ic_add_photo_alternate,
           secondary = true, enabled = !state.isLoadingImages) })
     }
-    if (state.isLoadingImages) item(span = { GridItemSpan(maxLineSpan) }) { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+    if (state.isLoadingImages) item(span = { GridItemSpan(maxLineSpan) }) { PhotoOpeningStatus() }
     items(state.selectedImages, key = { it.id }) { image ->
       Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column {
-          Photo(image.uri, image.displayName, Modifier.fillMaxWidth().aspectRatio(1f), ContentScale.Crop)
+          Photo(image.uri, null, Modifier.fillMaxWidth().aspectRatio(1f), ContentScale.Crop)
           Row(Modifier.padding(start = Space.md), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f).padding(vertical = Space.md)) {
               Text(image.displayName, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -53,5 +54,6 @@ fun PreviewScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, 
         }
       }
     }
+  }
   }
 }

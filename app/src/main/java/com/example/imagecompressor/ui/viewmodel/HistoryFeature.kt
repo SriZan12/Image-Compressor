@@ -13,9 +13,9 @@ class HistoryFeature(private val imageRepository: ImageRepository, private val s
   fun clearHistory() = remove { imageRepository.clearHistory() }
   private fun remove(action: suspend () -> Unit) {
     scope.launch {
-      try { action(); showMessage("Retained results removed. Gallery copies and originals were kept.") }
+      try { action(); showMessage("Removed from Shrink. Originals and gallery photos are safe.") }
       catch (cancelled: CancellationException) { throw cancelled }
-      catch (failure: Exception) { showMessage(userMessage(failure, "Unable to remove retained results. Try again.")) }
+      catch (failure: Exception) { showMessage(userMessage(failure, "Unable to remove these copies. Try again.")) }
     }
   }
 }

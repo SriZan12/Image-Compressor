@@ -4,12 +4,30 @@ Shrink is a privacy-first Android app built with Kotlin and Jetpack Compose. It 
 images through Android Photo Picker, compresses them locally, compares before and after sizes, and
 lets the user save or share the result.
 
+## Current work: editor redesign
+
+The newly approved [six-step editor plan](docs/design/editor-plan.md) starts with
+[Step 1: the main screen, Poppins, and native review renders](docs/design/editor-step-1.md).
+See [Step 2: photo opening and preview sizing](docs/design/editor-step-2.md) for
+the loading fixes, host measurements, and remaining device checks.
+[Step 3](docs/design/editor-step-3.md) adds live temporary previews, measured
+bytes, and cancellation when settings change. [Step 4](docs/design/editor-step-4.md)
+connects **Save photo**, **Share**, and **Compare with original** directly to the
+verified single-photo result. [Step 5](docs/design/editor-step-5.md) aligns the
+supporting screens, adds selectable batch previews, preserves work on picker
+cancellation, and adapts navigation and actions for large text. Device validation
+remains pending.
+
+The production-readiness milestones, earlier design screenshots, and validation
+records linked below are historical context. Their step numbers and completed
+checks are separate from this new editor sequence.
+
 ## Features
 
 - Single and batch image selection with Android Photo Picker
-- Image preview cards with file size, resolution, and format
+- Large photo previews with original and verified result sizes
 - JPEG, PNG, and WEBP conversion
-- Simple Smaller/Balanced/Best quality/size-limit presets; manual controls under Advanced
+- A simple detail slider and quick per-photo size limits; manual controls under Advanced
 - Exact decimal KB/MB upload limits and remembered compression settings
 - Large before/after slider with synchronized zoom and pan
 - Adaptive phone/tablet layouts and consistent rounded vector icons

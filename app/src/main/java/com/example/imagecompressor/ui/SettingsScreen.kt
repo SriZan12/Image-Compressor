@@ -5,13 +5,17 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.imagecompressor.R
 import com.example.imagecompressor.data.model.ThemePreference
+import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.Space
 import com.example.imagecompressor.ui.components.*
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
@@ -19,14 +23,14 @@ import com.example.imagecompressor.ui.state.ImageCompressorUiState
 @Composable
 fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSetTheme: (ThemePreference) -> Unit,
   onSetDynamicColor: (Boolean) -> Unit, onClearHistory: () -> Unit) {
-  var clear by remember { mutableStateOf(false) }
+  var clear by rememberSaveable { mutableStateOf(false) }
   if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text(stringResource(R.string.clear_history_title)) },
     text = { Text(stringResource(R.string.clear_history_body)) },
     confirmButton = { TextButton({ onClearHistory(); clear = false }) { Text(stringResource(R.string.remove_all)) } },
     dismissButton = { TextButton({ clear = false }) { Text(stringResource(R.string.cancel)) } })
   ScreenColumn(modifier) {
     SectionCard {
-      Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleLarge)
+      Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
       Column(Modifier.selectableGroup()) {
         ThemePreference.entries.forEach { theme ->
           Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(state.themePreference == theme, role = Role.RadioButton,
@@ -41,9 +45,9 @@ fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier,
       SettingSwitch(stringResource(R.string.device_colors), stringResource(R.string.device_colors_body), state.dynamicColor, onSetDynamicColor)
     }
     SectionCard {
-      Text(stringResource(R.string.storage), style = MaterialTheme.typography.titleLarge)
+      Text(stringResource(R.string.storage), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
       val used = state.history.filter { it.localPath != null }.sumOf { it.compressedSizeBytes }
-      Text(stringResource(R.string.storage_usage, "%.1f MiB".format(used / (1024.0 * 1024))), style = MaterialTheme.typography.titleMedium)
+      Text(stringResource(R.string.storage_usage, if (used == 0L) "0 MB" else used.toReadableSize()), style = MaterialTheme.typography.titleMedium)
       LinearProgressIndicator(progress = { (used / (512f * 1024 * 1024)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
       Text(stringResource(R.string.storage_help), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
       ActionButton(stringResource(R.string.clear_history), { clear = true }, Modifier.fillMaxWidth(), R.drawable.ic_delete,
@@ -51,7 +55,7 @@ fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier,
     }
     SectionCard {
       AppIcon(R.drawable.ic_lock)
-      Text(stringResource(R.string.privacy), style = MaterialTheme.typography.titleMedium)
+      Text(stringResource(R.string.privacy), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
       Text(stringResource(R.string.privacy_detail), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Text(stringResource(R.string.preferences_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

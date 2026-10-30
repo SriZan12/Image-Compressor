@@ -1,0 +1,12 @@
+{
+  "render": "Native Android Canvas / Robolectric API 35 / Compose app screens",
+  "physical_device": false,
+  "source_test": "DesignRenderTest.largeTextSettingsNavigationAndThemeRowsHaveUnclippedLabels",
+  "width_pixels": 320,
+  "height_pixels": 640,
+  "font_scale": 2,
+  "theme": "light",
+  "capture": "Copied unchanged from activity view.draw(Canvas(bitmap))",
+  "fixture": "Licensed NASA astronaut corpus; UI scenario state supplied by rendering test",
+  "sha256": "4df8c217303734d91f2d8701c42da1935956f7438398473c664092f8b993c698"
+}

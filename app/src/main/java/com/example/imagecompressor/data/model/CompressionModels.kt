@@ -61,6 +61,8 @@ data class CompressedImage(
   val adjustments: Set<CompressionAdjustment> = emptySet(),
   val encodingAttempts: Int = 1,
   val encodingQuality: Int? = null,
+  /** Digest of the immutable temporary candidate, used only when explicitly retaining a preview. */
+  val verifiedSha256: String? = null,
 ) {
   val reductionPercent: Int
     get() = calculateReductionPercent(original.sizeBytes, compressedSizeBytes)

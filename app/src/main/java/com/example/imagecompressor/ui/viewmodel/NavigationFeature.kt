@@ -41,6 +41,9 @@ class NavigationFeature(
       it.copy(
         screen = AppScreen.HOME,
         selectedImages = emptyList(),
+        editorImageId = null,
+        editorRetained = null,
+        editorExportError = null,
         compressedImages = emptyList(),
         compareImage = null,
         progress = BatchProgress(),

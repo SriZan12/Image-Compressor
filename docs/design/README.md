@@ -1,5 +1,15 @@
 # Shrink design system and adaptive UI
 
+The current redesign starts with the [new six-step editor plan](editor-plan.md).
+See [Editor Step 1](editor-step-1.md) for Poppins, current app captures, component
+states, and validation, and [Editor Step 2](editor-step-2.md) for photo opening,
+viewport-aware previews, and measured cache behavior. [Editor Step 3](editor-step-3.md)
+adds temporary live previews and measured size feedback. [Editor Step 4](editor-step-4.md)
+connects verified export and comparison. [Editor Step 5](editor-step-5.md) aligns
+the supporting flows, batch previews, recovery actions, and large-text navigation.
+The records below describe the earlier production UI;
+their typography, screen flow, captures, and test counts are historical.
+
 Shrink is the working product name chosen from the supplied brief. The design aims
 for calm, clear, trustworthy photo compression for everyday Android users.
 The existing package identity and `Pictures / Image Compressor` export folder stay

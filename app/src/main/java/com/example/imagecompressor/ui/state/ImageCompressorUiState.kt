@@ -18,6 +18,8 @@ enum class AppScreen {
   SETTINGS,
 }
 
+enum class EditorAction { SAVE, SHARE }
+
 data class BatchProgress(val completed: Int = 0, val total: Int = 0) {
   val fraction: Float
     get() = if (total == 0) 0f else completed.toFloat() / total
@@ -26,7 +28,12 @@ data class BatchProgress(val completed: Int = 0, val total: Int = 0) {
 data class ImageCompressorUiState(
   val screen: AppScreen,
   val selectedImages: List<SelectedImage> = emptyList(),
+  val editorImageId: String? = null,
   val compressionSettings: CompressionSettings = CompressionSettings(),
+  val editorPreview: EditorPreview = EditorPreview.NotCalculated,
+  val editorRetained: EditorPreview.Ready? = null,
+  val editorAction: EditorAction? = null,
+  val editorExportError: String? = null,
   val compressedImages: List<CompressedImage> = emptyList(),
   val compareImage: CompressedImage? = null,
   val compareReturnScreen: AppScreen = AppScreen.RESULTS,
@@ -43,4 +50,7 @@ data class ImageCompressorUiState(
   val batch: BatchSnapshot? = null,
   val saveErrors: Map<Long, String> = emptyMap(),
   val message: String? = null,
-)
+) {
+  val editorSource: SelectedImage?
+    get() = selectedImages.find { it.id == editorImageId } ?: selectedImages.firstOrNull()
+}

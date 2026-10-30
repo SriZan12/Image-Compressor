@@ -4,12 +4,18 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 
 object ShareUtils {
   fun shareUris(context: Context, uris: List<Uri>, onError: (String) -> Unit) {
     if (uris.isEmpty()) return
+    val activity = context.activity()
+    if (activity != null && (activity.isDestroyed || activity.isFinishing || activity.isChangingConfigurations)) {
+      onError("Your photo is ready. Tap Share again from the current screen.")
+      return
+    }
     try {
       val intent = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
         type = "image/*"
@@ -28,5 +34,11 @@ object ShareUtils {
     } catch (_: SecurityException) {
       onError("This image can no longer be shared. Reopen the result or select the original again.")
     }
+  }
+
+  private tailrec fun Context.activity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.activity()
+    else -> null
   }
 }

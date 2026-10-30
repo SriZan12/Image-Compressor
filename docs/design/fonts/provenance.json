@@ -1,0 +1,74 @@
+{
+  "sourceRepository": "https://github.com/google/fonts",
+  "revision": "6157dfaa640ca5738b4d1a7070fe389c3036d7fc",
+  "licenseSource": "https://raw.githubusercontent.com/google/fonts/6157dfaa640ca5738b4d1a7070fe389c3036d7fc/ofl/poppins/OFL.txt",
+  "licenseSha256": "6be04893d770899a015649c7aa3b582f871b272f8747a92b78b17c3e5c8b2573",
+  "fonts": [
+    {
+      "file": "poppins_regular.ttf",
+      "upstreamFile": "Poppins-Regular.ttf",
+      "weight": 400,
+      "bytes": 160316,
+      "sha256": "7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba",
+      "source": "https://raw.githubusercontent.com/google/fonts/6157dfaa640ca5738b4d1a7070fe389c3036d7fc/ofl/poppins/Poppins-Regular.ttf",
+      "nameRecords": [
+        [
+          1,
+          "Poppins"
+        ],
+        [
+          2,
+          "Regular"
+        ],
+        [
+          5,
+          "4.004"
+        ]
+      ]
+    },
+    {
+      "file": "poppins_medium.ttf",
+      "upstreamFile": "Poppins-Medium.ttf",
+      "weight": 500,
+      "bytes": 158576,
+      "sha256": "90373e7d838d32468438fc3e152dca0bdb12edcab99ea639f158790b1ba1fd05",
+      "source": "https://raw.githubusercontent.com/google/fonts/6157dfaa640ca5738b4d1a7070fe389c3036d7fc/ofl/poppins/Poppins-Medium.ttf",
+      "nameRecords": [
+        [
+          1,
+          "Poppins Medium"
+        ],
+        [
+          2,
+          "Regular"
+        ],
+        [
+          5,
+          "4.004"
+        ]
+      ]
+    },
+    {
+      "file": "poppins_semibold.ttf",
+      "upstreamFile": "Poppins-SemiBold.ttf",
+      "weight": 600,
+      "bytes": 157312,
+      "sha256": "d3bf1bdaf0550e83da9ac0b1d1d9fe6db086835a83aa28578e609a394b9a0286",
+      "source": "https://raw.githubusercontent.com/google/fonts/6157dfaa640ca5738b4d1a7070fe389c3036d7fc/ofl/poppins/Poppins-SemiBold.ttf",
+      "nameRecords": [
+        [
+          1,
+          "Poppins SemiBold"
+        ],
+        [
+          2,
+          "Regular"
+        ],
+        [
+          5,
+          "4.004"
+        ]
+      ]
+    }
+  ]
+}

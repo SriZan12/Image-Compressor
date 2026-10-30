@@ -10,6 +10,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +20,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -71,29 +77,44 @@ private fun ImageCompressorApp(state: ImageCompressorUiState, viewModel: ImageCo
   val context = LocalContext.current
   val snackbar = remember { SnackbarHostState() }
   val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { viewModel.addSelectedImages(it) }
+  val replacementPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { viewModel.replaceSelectedImages(it) }
   val selectMany: () -> Unit = {
     try { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     catch (_: ActivityNotFoundException) { viewModel.showMessage("No photo picker is available on this device.") }
     catch (_: SecurityException) { viewModel.showMessage("Unable to open the photo picker. Please try again.") }
   }
-  val newPhotos: () -> Unit = { viewModel.startOver(selectMany) }
+  val newPhotos: () -> Unit = {
+    try { replacementPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    catch (_: ActivityNotFoundException) { viewModel.showMessage("No photo picker is available on this device.") }
+    catch (_: SecurityException) { viewModel.showMessage("Unable to open the photo picker. Please try again.") }
+  }
   val share: (List<Long>) -> Unit = { ids -> viewModel.shareResults(ids) { ShareUtils.shareUris(context, it, viewModel::showMessage) } }
-  LifecycleResumeEffect(Unit) { viewModel.refreshAvailability(); onPauseOrDispose { } }
+  LifecycleResumeEffect(Unit) {
+    viewModel.setEditorResumed(true)
+    viewModel.refreshAvailability()
+    onPauseOrDispose { viewModel.setEditorResumed(false) }
+  }
   LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); viewModel.consumeMessage() } }
   BackHandler(state.screen !in listOf(AppScreen.ONBOARDING, AppScreen.HOME)) { viewModel.goBack() }
   AppChrome(state.screen, snackbar, viewModel::goBack, viewModel::navigateTo,
     navigationEnabled = !state.isLoadingImages && !state.isSaving && !state.isCompressing) { modifier ->
     when (state.screen) {
       AppScreen.ONBOARDING -> OnboardingScreen(modifier, { viewModel.completeOnboarding(); selectMany() }, viewModel::completeOnboarding)
-      AppScreen.HOME -> HomeScreen(state, modifier, selectMany,
+      AppScreen.HOME -> HomeScreen(state, modifier, newPhotos,
         { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) }, { viewModel.navigateTo(AppScreen.HISTORY) })
       AppScreen.PREVIEW -> PreviewScreen(state, modifier, selectMany, viewModel::removeSelectedImage,
         { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) })
       AppScreen.COMPRESSION_SETTINGS -> CompressionSettingsScreen(state, modifier, viewModel::updateCompressionSettings,
-        viewModel::compressSelectedImages, { viewModel.navigateTo(AppScreen.PREVIEW) })
+        viewModel::compressSelectedImages, { viewModel.navigateTo(AppScreen.PREVIEW) },
+        onRetryPreview = viewModel::retryEditorPreview,
+        onTargetDraftValidityChange = viewModel::setEditorTargetDraftValid,
+        onPreviewPhoto = viewModel::previewSelectedImage,
+        onSave = viewModel::saveEditorPhoto,
+        onShare = { viewModel.shareEditorPhoto { ShareUtils.shareUris(context, listOf(it), viewModel::showMessage) } })
       AppScreen.RESULTS -> ResultsScreen(state, modifier, viewModel::saveAllToGallery,
         { share(state.compressedImages.map { it.historyId }) }, viewModel::openImageCompare, newPhotos,
-        viewModel::cancelCompression, viewModel::retryRemaining)
+        viewModel::cancelCompression, viewModel::retryRemaining,
+        onAdjustSize = { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) })
       AppScreen.IMAGE_COMPARE -> ImageCompareScreen(state, modifier, viewModel::saveToGallery, { share(listOf(it.historyId)) })
       AppScreen.HISTORY -> HistoryScreen(state, modifier, viewModel::deleteHistory, { share(listOf(it.id)) }, viewModel::openHistory, newPhotos)
       AppScreen.SETTINGS -> SettingsScreen(state, modifier, viewModel::setThemePreference, viewModel::setDynamicColor, viewModel::clearHistory)
@@ -128,16 +149,41 @@ internal fun AppChrome(screen: AppScreen, snackbar: SnackbarHostState = remember
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
             if (root) AppIcon(R.drawable.ic_shrink, modifier = Modifier.padding(Space.md))
             else IconButton(onBack, enabled = navigationEnabled) { AppIcon(R.drawable.ic_arrow_back, description = stringResource(R.string.back)) }
-            Text(stringResource(screen.titleResource()), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text(stringResource(screen.titleResource()), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).semantics { heading() })
           }
         }, bottomBar = {
-          if (root && !rail) NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+          if (root && !rail && LocalDensity.current.fontScale > 1.3f) LargeTextNavigation(screen, onNavigate, navigationEnabled)
+          else if (root && !rail) NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
             destinations.forEach { (destination, icon, label) ->
               NavigationBarItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon) },
                 label = { Text(stringResource(label)) }, enabled = navigationEnabled)
             }
           }
         }, snackbarHost = { SnackbarHost(snackbar) }) { padding -> content(Modifier.padding(padding)) }
+    }
+  }
+}
+
+/** Give large labels room to keep words intact instead of using fixed icon columns. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LargeTextNavigation(screen: AppScreen, onNavigate: (AppScreen) -> Unit, enabled: Boolean) {
+  Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    // Labels wrap as complete controls instead of splitting words into narrow icon columns.
+    FlowRow(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(
+      WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)).padding(Space.sm).selectableGroup(),
+      horizontalArrangement = Arrangement.SpaceEvenly, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+      destinations.forEach { (destination, _, label) ->
+        val selected = screen == destination
+        Surface(Modifier.heightIn(min = 48.dp)
+          .selectable(selected, enabled = enabled, role = Role.Tab, onClick = { onNavigate(destination) }),
+          shape = MaterialTheme.shapes.medium,
+          color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+          contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant) {
+          Text(stringResource(label), Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+            style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
+        }
+      }
     }
   }
 }

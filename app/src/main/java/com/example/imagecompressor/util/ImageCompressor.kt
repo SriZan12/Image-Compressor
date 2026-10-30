@@ -1,6 +1,7 @@
 package com.example.imagecompressor.util
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -28,8 +29,11 @@ import com.example.imagecompressor.util.compression.PixelSize
 import com.example.imagecompressor.util.compression.TargetSizeSearch
 import java.io.File
 import java.io.IOException
+import java.io.FileInputStream
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.channels.Channels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -46,23 +50,61 @@ class ImageCompressor(
   private val contentResolver = context.contentResolver
 
   override suspend fun inspect(uri: Uri): SelectedImage = withContext(Dispatchers.IO) {
-    val source = stageSource(uri)
-    try {
-      val info = readInfo(source)
-      val size = info.orientation.upright(info.size)
-      SelectedImage(uri, displayName(uri), source.length(), size.width, size.height, info.container.label)
-    } finally {
-      source.delete()
+    val descriptor = contentResolver.openAssetFileDescriptor(uri, "r")
+      ?: throw IOException("Unable to open the selected image.")
+    descriptor.use { asset ->
+      asset.createInputStream().use { input ->
+        val length = seekableWholeFileLength(asset, input)
+        if (length != null) {
+          if (length == 0L) throw IOException("The selected image is empty.")
+          if (length > CompressionPolicy.MAX_INPUT_BYTES) throw IOException("Choose an image no larger than 100 MiB.")
+          val info = readInfo(asset, input, length)
+          // Providers can replace or truncate files after selection. Compression revalidates its own
+          // staged snapshot; inspection also avoids publishing metadata for a changed-length file.
+          if (input.channel.size() != length) throw IOException("This image changed while opening. Select it again.")
+          selectedImage(uri, info, length)
+        } else {
+          // Pipes, unknown sizes and slices keep the bounded snapshot path. Reuse this provider
+          // stream rather than opening a second cloud/provider request after probing its metadata.
+          val source = stageSource(input)
+          try { selectedImage(uri, readInfo(source), source.length()) }
+          finally { source.delete() }
+        }
+      }
     }
   }
 
-  override suspend fun compress(image: SelectedImage, settings: CompressionSettings): CompressedImage {
+  private fun selectedImage(uri: Uri, info: ImageInfo, bytes: Long): SelectedImage {
+    val size = info.orientation.upright(info.size)
+    return SelectedImage(uri, displayName(uri), bytes, size.width, size.height, info.container.label)
+  }
+
+  private fun seekableWholeFileLength(asset: AssetFileDescriptor, input: FileInputStream): Long? {
+    val length = asset.parcelFileDescriptor.statSize
+    if (asset.startOffset != 0L || length < 0L ||
+      (asset.declaredLength != AssetFileDescriptor.UNKNOWN_LENGTH && asset.declaredLength != length)) return null
+    return try {
+      input.channel.position(0)
+      length.takeIf { input.channel.size() == it }
+    } catch (_: IOException) { null }
+  }
+
+  /** Lightweight factory: filesystem work starts only when its first preview is prepared on IO. */
+  fun createPreviewProcessor(): TemporaryImageProcessor = SessionTemporaryImageProcessor(context.applicationContext) { image, settings, directory ->
+    process(image, settings, previewDirectory = directory)
+  }
+
+  override suspend fun compress(image: SelectedImage, settings: CompressionSettings): CompressedImage =
+    process(image, settings)
+
+  private suspend fun process(image: SelectedImage, settings: CompressionSettings, previewDirectory: File? = null): CompressedImage {
     // Outside withContext so prompt cancellation on dispatcher return also removes unpublished results.
     var published: File? = null
     try {
       return withContext(Dispatchers.IO) {
         pipelineMutex.withLock {
-          val source = stageSource(image.uri)
+          val workingDirectory = previewDirectory ?: context.cacheDir
+          val source = stageSource(image.uri, workingDirectory)
           var base: Bitmap? = null
           try {
             val info = readInfo(source)
@@ -105,7 +147,7 @@ class ImageCompressor(
                 val bitmap = if (size == initial) upright else
                   upright.scale(size.width, size.height, true)
                 try {
-                  encode(bitmap, size, quality, settings.outputFormat)
+                  encode(bitmap, size, quality, settings.outputFormat, workingDirectory)
                 } finally {
                   if (bitmap !== upright) bitmap.recycle()
                 }
@@ -116,9 +158,10 @@ class ImageCompressor(
             try {
               currentCoroutineContext().ensureActive()
               if (candidate.size != initial) adjustments += CompressionAdjustment.TARGET_SIZE
-              val directory = File(context.cacheDir, "compressed")
+              val directory = previewDirectory ?: File(context.cacheDir, "compressed")
               if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Unable to create the output folder. Check available storage.")
-              val output = File.createTempFile("ImageCompressor_", ".${settings.outputFormat.extension}", directory)
+              val output = File.createTempFile(if (previewDirectory == null) "ImageCompressor_" else "Preview_",
+                ".${settings.outputFormat.extension}", directory)
               published = output
               Files.move(candidate.value.toPath(), output.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
               currentCoroutineContext().ensureActive()
@@ -126,7 +169,8 @@ class ImageCompressor(
               CompressedImage(
                 original = image.copy(sizeBytes = source.length(), width = uprightSource.width,
                   height = uprightSource.height, format = info.container.label),
-                outputUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", output),
+                outputUri = if (previewDirectory == null)
+                  FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", output) else Uri.fromFile(output),
                 outputFilePath = output.absolutePath,
                 compressedSizeBytes = output.length(),
                 width = candidate.size.width,
@@ -153,26 +197,29 @@ class ImageCompressor(
     }
   }
 
-  private suspend fun stageSource(uri: Uri): File {
-    val file = File.createTempFile("image-source-", ".tmp", context.cacheDir)
+  private suspend fun stageSource(uri: Uri, directory: File = context.cacheDir): File {
+    val input = contentResolver.openInputStream(uri) ?: throw IOException("Unable to open the selected image.")
+    return input.use { stageSource(it, directory) }
+  }
+
+  /** The caller owns input; both compression and descriptor fallback use the same bounded copy. */
+  private suspend fun stageSource(input: InputStream, directory: File = context.cacheDir): File {
+    val file = File.createTempFile("image-source-", ".tmp", directory)
     var complete = false
     try {
       val coroutine = currentCoroutineContext()
-      val input = contentResolver.openInputStream(uri) ?: throw IOException("Unable to open the selected image.")
-      input.use { source ->
-        file.outputStream().use { output ->
-          val buffer = ByteArray(65536)
-          var total = 0L
-          while (true) {
-            coroutine.ensureActive()
-            val count = source.read(buffer)
-            if (count < 0) break
-            total += count
-            if (total > CompressionPolicy.MAX_INPUT_BYTES) throw IOException("Choose an image no larger than 100 MiB.")
-            output.write(buffer, 0, count)
-          }
-          if (total == 0L) throw IOException("The selected image is empty.")
+      file.outputStream().use { output ->
+        val buffer = ByteArray(65536)
+        var total = 0L
+        while (true) {
+          coroutine.ensureActive()
+          val count = input.read(buffer)
+          if (count < 0) break
+          total += count
+          if (total > CompressionPolicy.MAX_INPUT_BYTES) throw IOException("Choose an image no larger than 100 MiB.")
+          output.write(buffer, 0, count)
         }
+        if (total == 0L) throw IOException("The selected image is empty.")
       }
       complete = true
       return file
@@ -184,16 +231,37 @@ class ImageCompressor(
   private data class ImageInfo(val size: PixelSize, val orientation: ExifOrientation,
     val container: ImageContainer, val wideGamut: Boolean)
 
+  private suspend fun readInfo(asset: AssetFileDescriptor, input: FileInputStream, length: Long): ImageInfo {
+    val coroutine = currentCoroutineContext()
+    val container = ImageContainer.validate(input, length) { coroutine.ensureActive() }
+    coroutine.ensureActive()
+    input.channel.position(0)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFileDescriptor(asset.fileDescriptor, null, bounds)
+    val size = checkedBounds(bounds)
+    coroutine.ensureActive()
+    input.channel.position(0)
+    // Borrow the rewound channel without descriptor duplication or an AFD slice stream's consumed
+    // remaining-byte counter. The outer input/asset scope retains sole ownership of its lifetime.
+    val exif = ExifInterface(Channels.newInputStream(input.channel))
+    val orientation = ExifOrientation.from(exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, 1))
+    coroutine.ensureActive()
+    return ImageInfo(size, orientation, container, bounds.outColorSpace?.isWideGamut == true)
+  }
+
   private suspend fun readInfo(file: File): ImageInfo {
     val coroutine = currentCoroutineContext()
     val container = ImageContainer.validate(file) { coroutine.ensureActive() }
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Unable to read this image's dimensions.")
-    val size = PixelSize(bounds.outWidth, bounds.outHeight)
-    CompressionPolicy.validateInput(size)
+    val size = checkedBounds(bounds)
     val orientation = ExifOrientation.from(ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1))
     return ImageInfo(size, orientation, container, bounds.outColorSpace?.isWideGamut == true)
+  }
+
+  private fun checkedBounds(bounds: BitmapFactory.Options): PixelSize {
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("Unable to read this image's dimensions.")
+    return PixelSize(bounds.outWidth, bounds.outHeight).also(CompressionPolicy::validateInput)
   }
 
   private fun render(source: Bitmap, size: PixelSize, orientation: ExifOrientation, whiteBackground: Boolean): Bitmap {
@@ -212,8 +280,8 @@ class ImageCompressor(
     }
   }
 
-  private suspend fun encode(bitmap: Bitmap, size: PixelSize, quality: Int, format: OutputFormat): EncodedCandidate<File> {
-    val file = File.createTempFile("image-candidate-", ".${format.extension}", context.cacheDir)
+  private suspend fun encode(bitmap: Bitmap, size: PixelSize, quality: Int, format: OutputFormat, directory: File): EncodedCandidate<File> {
+    val file = File.createTempFile("image-candidate-", ".${format.extension}", directory)
     var complete = false
     try {
       currentCoroutineContext().ensureActive()

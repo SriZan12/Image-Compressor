@@ -20,6 +20,9 @@ interface CompressionHistoryDao {
   @Query("SELECT * FROM compression_history WHERE id = :id")
   suspend fun find(id: Long): CompressionHistoryEntity?
 
+  @Query("SELECT * FROM compression_history WHERE localPath = :path OR compressedUri = :uri LIMIT 1")
+  suspend fun findByOutput(path: String, uri: String): CompressionHistoryEntity?
+
   @Query("UPDATE compression_history SET pendingSaveUri = :uri WHERE id = :id")
   suspend fun setPendingSave(id: Long, uri: String?)
 

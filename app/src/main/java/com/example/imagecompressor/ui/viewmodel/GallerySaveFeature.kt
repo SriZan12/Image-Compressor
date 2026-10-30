@@ -35,7 +35,9 @@ class GallerySaveFeature(private val state: MutableStateFlow<ImageCompressorUiSt
             it.copy(saveErrors = it.saveErrors + (image.historyId to userMessage(failure, "Unable to save this image. Check available storage and retry.")))
           } }
         }
-        showMessage("$savedCount saved to gallery. ${state.value.saveErrors.size} failed.")
+        val failed = state.value.saveErrors.size
+        showMessage(if (failed == 0) "Saved to Pictures / Image Compressor."
+          else "$savedCount saved. $failed could not be saved. Please try again.")
       } finally { state.update { it.copy(isSaving = false) } }
     }
   }
