@@ -18,8 +18,9 @@ supporting screens, adds selectable batch previews, preserves work on picker
 cancellation, and adapts navigation and actions for large text. Device validation
 remains pending.
 
-The [soft 3D icon family](docs/design/soft-icons.md) adds the new launcher emblem,
-matching in-app artwork, and shaded action icons.
+The [scalable icon and startup update](docs/design/vector-icons-home.md) uses native
+vectors for the launcher, navigation, themes, and actions. New sessions open Home;
+previous results are available through an explicit review action.
 
 The production-readiness milestones, earlier design screenshots, and validation
 records linked below are historical context. Their step numbers and completed

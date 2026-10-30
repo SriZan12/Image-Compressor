@@ -125,6 +125,8 @@ class EditorExportViewModelTest {
     val repository = RecordingRepository().apply { seed(receipt) }
     val state = savedReceiptState(source, settings, receipt.historyId)
     withHarness(repository, state) {
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
       vm.setEditorResumed(true)
       runCurrent()
       advanceTimeBy(1_000)
@@ -153,6 +155,8 @@ class EditorExportViewModelTest {
     withHarness(savedState = savedReceiptState(source, settings, 42)) {
       assertNull(vm.uiState.value.editorRetained)
       assertNull(savedState.get<Long>("editorResultId"))
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
       vm.setEditorResumed(true)
       runCurrent()
       advanceTimeBy(150)
@@ -176,6 +180,8 @@ class EditorExportViewModelTest {
     val repository = RecordingRepository().apply { seed(galleryOnly) }
     withHarness(repository, savedReceiptState(source, settings, galleryOnly.historyId)) {
       assertNull(vm.uiState.value.editorRetained)
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
       vm.setEditorResumed(true)
       runCurrent()
       advanceTimeBy(150)

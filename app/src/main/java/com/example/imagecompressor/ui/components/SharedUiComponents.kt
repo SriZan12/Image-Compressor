@@ -36,22 +36,22 @@ import com.example.imagecompressor.theme.Space
 
 @Composable
 fun AppIcon(@DrawableRes resource: Int, modifier: Modifier = Modifier, description: String? = null, size: Dp = 24.dp) {
-  val artwork = when (resource) {
-    R.drawable.ic_shrink, R.drawable.ic_photo_library -> R.drawable.art_shrink
-    R.drawable.ic_history -> R.drawable.art_recent
-    R.drawable.ic_settings -> R.drawable.art_settings
-    else -> null
-  }
   val sculpted = when (resource) {
+    R.drawable.ic_shrink, R.drawable.ic_photo_library -> R.drawable.ic_soft_shrink
+    R.drawable.ic_history -> R.drawable.ic_soft_recent
+    R.drawable.ic_settings -> R.drawable.ic_soft_settings
     R.drawable.ic_add_photo_alternate -> R.drawable.ic_soft_add_photo
     R.drawable.ic_download -> R.drawable.ic_soft_save
     R.drawable.ic_share -> R.drawable.ic_soft_share
     R.drawable.ic_compare -> R.drawable.ic_soft_compare
     R.drawable.ic_lock -> R.drawable.ic_soft_lock
+    R.drawable.ic_contrast -> R.drawable.ic_soft_system
+    R.drawable.ic_light_mode -> R.drawable.ic_soft_light
+    R.drawable.ic_dark_mode -> R.drawable.ic_soft_dark
+    R.drawable.ic_delete -> R.drawable.ic_soft_delete
     else -> null
   }
   when {
-    artwork != null -> AppArtwork(artwork, resource, size, modifier.alpha(LocalContentColor.current.alpha), description)
     sculpted != null -> Icon(painterResource(sculpted), description,
       modifier.size(size).alpha(LocalContentColor.current.alpha), tint = Color.Unspecified)
     else -> Icon(painterResource(resource), description, modifier.size(size))

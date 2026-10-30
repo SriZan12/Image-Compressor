@@ -18,7 +18,14 @@ class NavigationFeature(
 
   fun navigateTo(screen: AppScreen) {
     if (state.value.isCompressing || state.value.isSaving || state.value.isInitializing || state.value.isLoadingImages) return
-    state.update { it.copy(screen = screen, message = null) }
+    state.update { current ->
+      val resultsOrigin = when {
+        screen != AppScreen.RESULTS || current.screen in setOf(AppScreen.RESULTS, AppScreen.IMAGE_COMPARE) -> current.resultsReturnScreen
+        current.screen == AppScreen.HOME -> AppScreen.HOME
+        else -> AppScreen.COMPRESSION_SETTINGS
+      }
+      current.copy(screen = screen, resultsReturnScreen = resultsOrigin, message = null)
+    }
   }
 
   fun goBack() {
@@ -28,7 +35,7 @@ class NavigationFeature(
         AppScreen.HOME -> AppScreen.HOME
         AppScreen.PREVIEW -> if (state.value.selectedImages.isEmpty()) AppScreen.HOME else AppScreen.COMPRESSION_SETTINGS
         AppScreen.COMPRESSION_SETTINGS -> AppScreen.HOME
-        AppScreen.RESULTS -> AppScreen.COMPRESSION_SETTINGS
+        AppScreen.RESULTS -> state.value.resultsReturnScreen
         AppScreen.IMAGE_COMPARE -> state.value.compareReturnScreen
         AppScreen.HISTORY,
         AppScreen.SETTINGS -> AppScreen.HOME
@@ -46,6 +53,7 @@ class NavigationFeature(
         editorExportError = null,
         compressedImages = emptyList(),
         compareImage = null,
+        resultsReturnScreen = AppScreen.COMPRESSION_SETTINGS,
         progress = BatchProgress(),
         batch = null,
         saveErrors = emptyMap(),

@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="32dp" android:height="32dp"
+    android:viewportWidth="64" android:viewportHeight="64">
+    <!-- A divided, softly bevelled disc stays recognizable at small sizes. -->
+    <path android:fillColor="#9C927F" android:pathData="M32,9a25,25 0,1 0,0 50a25,25 0,1 0,0 -50" />
+    <path android:pathData="M32,6a25,25 0,1 0,0 50a25,25 0,1 0,0 -50">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="13" android:startY="9" android:endX="49" android:endY="55" android:startColor="#FFFDF3" android:endColor="#DCC7A6" android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M32,11a20,20 0,0 1,0 40Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="33" android:startY="12" android:endX="50" android:endY="48" android:startColor="#80CABD" android:endColor="#1E6069" android:type="linear" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#3C797C" android:fillAlpha="0.55" android:pathData="M32,11H33.5V51H32Z" />
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFF" android:strokeAlpha="0.8" android:strokeWidth="2" android:strokeLineCap="round" android:pathData="M15,25C17,16 24,11 31,11" />
+    <path android:fillColor="@android:color/transparent" android:strokeColor="#B9E3D6" android:strokeAlpha="0.8" android:strokeWidth="1.7" android:strokeLineCap="round" android:pathData="M38,15C45,18 49,24 49,31" />
+</vector>

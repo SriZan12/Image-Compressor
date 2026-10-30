@@ -48,6 +48,7 @@
     <string name="home_pick_caption">Choose one photo or a few at once.</string>
     <string name="private_body">Only on your device. Your originals stay safe.</string>
     <string name="continue_selection">Continue</string>
+    <string name="review_previous_photos">Review previous photos</string>
     <string name="recent_activity">Recent photos</string>
     <string name="view_history">See all</string>
     <string name="onboarding_title">Photo too big?</string>

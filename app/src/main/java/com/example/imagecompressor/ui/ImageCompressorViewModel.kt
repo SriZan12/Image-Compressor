@@ -61,13 +61,10 @@ class ImageCompressorViewModel internal constructor(
   private val _uiState =
     MutableStateFlow(
       ImageCompressorUiState(
-        screen =
-          if (preferencesRepository.onboardingComplete.value) AppScreen.HOME
-          else AppScreen.ONBOARDING,
+        screen = AppScreen.HOME,
         themePreference = preferencesRepository.themePreference.value,
         compressionSettings = savedState.get<String>("settings")?.let(SettingsCodec::decode) ?: preferencesRepository.lastCompressionSettings,
         dynamicColor = preferencesRepository.dynamicColor.value,
-        compareReturnScreen = if (savedState.get<String>("compareFrom") == AppScreen.HISTORY.name) AppScreen.HISTORY else AppScreen.RESULTS,
       )
     )
   val uiState = _uiState.asStateFlow()
@@ -163,7 +160,7 @@ class ImageCompressorViewModel internal constructor(
       try {
         imageRepository.initialize()
         val recovered = imageRepository.batch.first()
-        val restored = restoreSession(savedState, recovered, imageRepository, preferencesRepository.onboardingComplete.value)
+        val restored = restoreSession(savedState, recovered, imageRepository)
         val retainedSettings = savedState.get<String>("editorResultSettings")?.let(SettingsCodec::decode)
         val retained = savedState.get<Long>("editorResultId")?.let { imageRepository.getResult(it) }
           ?.takeIf { retainedSettings == restored.settings && it.original == restored.selection.singleOrNull() &&
@@ -171,7 +168,7 @@ class ImageCompressorViewModel internal constructor(
           ?.let { EditorPreview.Ready(it, restored.settings) }
         applyBatch(recovered)
         _uiState.update { it.copy(selectedImages = restored.selection, compressionSettings = restored.settings,
-          screen = restored.screen, compareImage = restored.compare, message = restored.message,
+          screen = AppScreen.HOME, compareImage = null, message = restored.message,
           editorRetained = retained, editorImageId = savedState.get<String>("editorImageId")
             ?.takeIf { id -> restored.selection.any { image -> image.id == id } }) }
         sessionLoaded = true

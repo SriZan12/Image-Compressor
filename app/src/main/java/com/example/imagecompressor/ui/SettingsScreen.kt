@@ -35,7 +35,7 @@ fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier,
         ThemePreference.entries.forEach { theme ->
           Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(state.themePreference == theme, role = Role.RadioButton,
             onClick = { onSetTheme(theme) }).padding(vertical = Space.sm), horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(when (theme) { ThemePreference.SYSTEM -> R.drawable.ic_contrast; ThemePreference.LIGHT -> R.drawable.ic_light_mode; ThemePreference.DARK -> R.drawable.ic_dark_mode })
+            AppIcon(when (theme) { ThemePreference.SYSTEM -> R.drawable.ic_contrast; ThemePreference.LIGHT -> R.drawable.ic_light_mode; ThemePreference.DARK -> R.drawable.ic_dark_mode }, size = 28.dp)
             Text(stringResource(when (theme) { ThemePreference.SYSTEM -> R.string.theme_system; ThemePreference.LIGHT -> R.string.theme_light; ThemePreference.DARK -> R.string.theme_dark }), Modifier.weight(1f))
             RadioButton(state.themePreference == theme, onClick = null)
           }

@@ -1,5 +1,9 @@
 # Soft 3D icon family
 
+Historical record: the [vector icon and Home startup update](vector-icons-home.md)
+replaces the three generated PNGs and Coil artwork loader with native vectors.
+The captures and validation below describe the previous revision.
+
 The user's sculpted utility-icon reference replaces the earlier outlined-only
 brand direction. The app keeps its Poppins typography and calm layouts, with
 warm ivory photo frames, teal surfaces, amber details, and a little lavender.

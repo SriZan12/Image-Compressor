@@ -53,10 +53,14 @@ class LiveEditorViewModelTest {
     }
   }
 
-  @Test fun recreationRestoresTheChosenBatchSampleAndRegeneratesOnlyThatPhoto() = runTest {
+  @Test fun relaunchKeepsTheChosenBatchSampleAndRegeneratesItOnlyAfterContinue() = runTest {
     withHarness(SavedStateHandle(mapOf("screen" to AppScreen.COMPRESSION_SETTINGS.name,
       "selection" to arrayListOf(photo("first").id, photo("second").id), "editorImageId" to photo("second").id))) {
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
       vm.setEditorResumed(true)
+      runCurrent(); advanceTimeBy(150); runCurrent()
+      assertTrue(processor.requests.isEmpty())
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
       runCurrent(); advanceTimeBy(150); runCurrent()
       assertEquals(photo("second"), vm.uiState.value.editorSource)
       assertEquals(listOf(photo("second")), processor.requests.map { it.image })

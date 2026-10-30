@@ -101,7 +101,8 @@ private fun ImageCompressorApp(state: ImageCompressorUiState, viewModel: ImageCo
     when (state.screen) {
       AppScreen.ONBOARDING -> OnboardingScreen(modifier, { viewModel.completeOnboarding(); selectMany() }, viewModel::completeOnboarding)
       AppScreen.HOME -> HomeScreen(state, modifier, newPhotos,
-        { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) }, { viewModel.navigateTo(AppScreen.HISTORY) })
+        { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) }, { viewModel.navigateTo(AppScreen.HISTORY) },
+        { viewModel.navigateTo(AppScreen.RESULTS) })
       AppScreen.PREVIEW -> PreviewScreen(state, modifier, selectMany, viewModel::removeSelectedImage,
         { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) })
       AppScreen.COMPRESSION_SETTINGS -> CompressionSettingsScreen(state, modifier, viewModel::updateCompressionSettings,

@@ -166,16 +166,15 @@ class WorkflowTest {
     assertNull(state.value.editorSource)
   }
 
-  @Test fun interruptedBatchOverridesStaleScreenAndRestoresItsSettingsAndResults() = runTest {
+  @Test fun interruptedBatchRestoresWorkWithoutChoosingADestination() = runTest {
     val repo = FakeRepository()
     val batch = BatchSnapshot("batch", CompressionSettings(quality = 61), BatchStatus.INTERRUPTED,
       listOf(BatchItem("one", image("one"), ItemStatus.COMPLETED, output(1)), BatchItem("two", image("two"), ItemStatus.INTERRUPTED)))
     val handle = SavedStateHandle(mapOf("screen" to AppScreen.HOME.name, "settings" to SettingsCodec.encode(CompressionSettings(quality = 90))))
-    val restored = restoreSession(handle, batch, repo, true)
-    assertEquals(AppScreen.RESULTS, restored.screen)
+    val restored = restoreSession(handle, batch, repo)
     assertEquals(61, restored.settings.quality)
     assertEquals(2, restored.selection.size)
-    assertTrue(restored.message!!.contains("interrupted"))
+    assertTrue(restored.message!!.contains("Review previous photos"))
   }
 
   @Test fun recreationPreservesNewSelectionAndSettingsRatherThanReplacingThemWithAnOlderCompletedBatch() = runTest {
@@ -185,22 +184,111 @@ class WorkflowTest {
     val settings = CompressionSettings(quality = 60, allowTargetResize = false, outputFormat = OutputFormat.WEBP)
     val saved = SavedStateHandle(mapOf("screen" to AppScreen.COMPRESSION_SETTINGS.name,
       "selection" to arrayListOf(image("new").uri.toString()), "settings" to SettingsCodec.encode(settings)))
-    val restored = restoreSession(saved, batch, repo, true)
+    val restored = restoreSession(saved, batch, repo)
     assertEquals(listOf("new"), restored.selection.map { it.displayName })
     assertEquals(settings, restored.settings)
-    assertEquals(AppScreen.COMPRESSION_SETTINGS, restored.screen)
   }
 
-  @Test fun comparisonRestoresByHistoryIdAndExpiredSelectionGetsAnActionableMessage() = runTest {
+  @Test fun expiredSelectionGetsAnActionableMessageWithoutReopeningAnOldComparison() = runTest {
     val repo = FakeRepository()
     repo.result = output(7)
     repo.inspect = { SelectionResult(emptyList(), listOf("Revoked permission")) }
     val saved = SavedStateHandle(mapOf("screen" to AppScreen.IMAGE_COMPARE.name,
       "compareId" to 7L, "selection" to arrayListOf(image("gone").uri.toString())))
-    val restored = restoreSession(saved, null, repo, true)
-    assertEquals(7L, restored.compare!!.historyId)
-    assertEquals(AppScreen.IMAGE_COMPARE, restored.screen)
+    val restored = restoreSession(saved, null, repo)
+    assertEquals(0, repo.resultReads)
     assertTrue(restored.message!!.contains("Select them again"))
+  }
+
+  @Test fun everySavedDestinationAndFirstLaunchPreferenceOpenHomeAfterSplash() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    try {
+      for (previous in listOf(null) + AppScreen.entries) {
+        for (onboardingComplete in listOf(false, true)) {
+          val repo = FakeRepository()
+          val store = ViewModelStore()
+          val saved = SavedStateHandle(mapOf("screen" to previous?.name,
+            "selection" to arrayListOf(image("draft").uri.toString())))
+          try {
+            val vm = ImageCompressorViewModel(RuntimeEnvironment.getApplication(), saved, repo,
+              MemoryPreferences(onboardingComplete))
+            store.put("startup", vm)
+            assertTrue(vm.uiState.value.isInitializing)
+            runCurrent()
+            assertFalse(vm.uiState.value.isInitializing)
+            assertEquals("Previous destination: $previous, onboarding: $onboardingComplete", AppScreen.HOME, vm.uiState.value.screen)
+            assertEquals(listOf(image("draft")), vm.uiState.value.selectedImages)
+            assertEquals(AppScreen.HOME.name, saved.get<String>("screen"))
+          } finally { store.clear(); runCurrent() }
+        }
+      }
+    } finally { Dispatchers.resetMain() }
+  }
+
+  @Test fun persistedBatchesStayOnHomeUntilTheUserExplicitlyReviewsThem() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    try {
+      for (status in BatchStatus.entries) {
+        val recovered = BatchSnapshot("previous", CompressionSettings(quality = 61), status,
+          listOf(BatchItem("one", image("one"), ItemStatus.COMPLETED, output(1))))
+        val repo = FakeRepository().apply { batch.value = recovered }
+        val store = ViewModelStore()
+        try {
+          val vm = ImageCompressorViewModel(RuntimeEnvironment.getApplication(), SavedStateHandle(), repo, MemoryPreferences())
+          store.put("startup", vm)
+          runCurrent()
+          assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+          assertEquals(recovered, vm.uiState.value.batch)
+          assertEquals(recovered.results, vm.uiState.value.compressedImages)
+          assertEquals(61, vm.uiState.value.compressionSettings.quality)
+          vm.navigateTo(AppScreen.RESULTS)
+          assertEquals(AppScreen.RESULTS, vm.uiState.value.screen)
+          vm.goBack()
+          assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+        } finally { store.clear(); runCurrent() }
+      }
+    } finally { Dispatchers.resetMain() }
+  }
+
+  @Test fun delayedInitializationAndRepeatedRepositoryOrResumeUpdatesDoNotRedirectHome() = runTest {
+    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+    val initialized = CompletableDeferred<Unit>()
+    val repo = FakeRepository().apply { beforeInitialize = { initialized.await() } }
+    val store = ViewModelStore()
+    try {
+      val vm = ImageCompressorViewModel(RuntimeEnvironment.getApplication(), SavedStateHandle(), repo, MemoryPreferences())
+      store.put("startup", vm)
+      val destinations = mutableListOf<AppScreen>()
+      backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+        vm.uiState.filterNot { it.isInitializing }.map { it.screen }.distinctUntilChanged().toList(destinations)
+      }
+      runCurrent()
+      vm.refreshAvailability()
+      vm.refreshAvailability()
+      assertEquals(1, repo.initializeCalls)
+      initialized.complete(Unit)
+      runCurrent()
+      for (status in listOf(BatchStatus.COMPLETED, BatchStatus.INTERRUPTED, BatchStatus.CANCELLED)) {
+        repo.batch.value = BatchSnapshot("late", CompressionSettings(), status,
+          listOf(BatchItem("one", image("one"), ItemStatus.COMPLETED, output(1))))
+        repo.history.value = listOf(CompressionHistoryEntity(id = 1, createdAt = status.ordinal.toLong(),
+          displayName = "one", originalUri = image("one").uri.toString(), compressedUri = output(1).outputUri.toString(),
+          originalSizeBytes = 1000, compressedSizeBytes = 500, width = 10, height = 10, outputFormat = "JPEG"))
+        vm.refreshAvailability()
+        vm.setEditorResumed(true)
+        runCurrent()
+        assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+        assertEquals(repo.history.value, vm.uiState.value.history)
+      }
+      assertEquals(listOf(AppScreen.HOME), destinations)
+      assertEquals(1, repo.initializeCalls)
+      vm.navigateTo(AppScreen.SETTINGS)
+      repo.batch.value = null
+      vm.refreshAvailability()
+      runCurrent()
+      assertEquals(AppScreen.SETTINGS, vm.uiState.value.screen)
+      assertEquals(listOf(AppScreen.HOME, AppScreen.SETTINGS), destinations)
+    } finally { store.clear(); runCurrent(); Dispatchers.resetMain() }
   }
 
   @Test fun startupFailureBlocksWorkUntilExplicitRetryRestoresTheSession() = runTest {
@@ -230,10 +318,37 @@ class WorkflowTest {
       vm.refreshAvailability()
       runCurrent()
       assertNull(vm.uiState.value.initializationError)
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
       vm.addSelectedImages(listOf(image("readable").uri))
       runCurrent()
       assertEquals(listOf("readable"), vm.uiState.value.selectedImages.map { it.displayName })
     } finally { store.clear(); runCurrent(); Dispatchers.resetMain() }
+  }
+
+  @Test fun reviewingPreviousPhotosKeepsHomeAsTheBackDestinationThroughComparisonAndRetry() = runTest {
+    val state = MutableStateFlow(ImageCompressorUiState(AppScreen.HOME,
+      selectedImages = listOf(image("one")), compressedImages = listOf(output(1)), isInitializing = false))
+    val navigation = NavigationFeature(state) {}
+    val compression = ImageCompressionFeature(state, FakeRepository(), backgroundScope, {})
+    navigation.navigateTo(AppScreen.RESULTS)
+    navigation.navigateTo(AppScreen.RESULTS) // Repeated requests do not replace the origin.
+    navigation.openImageCompare(output(1))
+    navigation.goBack()
+    assertEquals(AppScreen.RESULTS, state.value.screen)
+    compression.retryRemaining()
+    runCurrent()
+    navigation.goBack()
+    assertEquals(AppScreen.HOME, state.value.screen)
+
+    navigation.navigateTo(AppScreen.COMPRESSION_SETTINGS)
+    compression.compressSelectedImages()
+    runCurrent()
+    assertEquals(AppScreen.RESULTS, state.value.screen)
+    navigation.openImageCompare(output(1))
+    navigation.goBack()
+    assertEquals(AppScreen.RESULTS, state.value.screen)
+    navigation.goBack()
+    assertEquals(AppScreen.COMPRESSION_SETTINGS, state.value.screen)
   }
 
   @Test fun comparisonReturnsToItsOriginAndBusyNavigationIsBlocked() {
@@ -251,23 +366,36 @@ class WorkflowTest {
     assertEquals(AppScreen.RESULTS, state.value.screen)
   }
 
+  private class MemoryPreferences(onboarding: Boolean = true) : AppPreferencesRepository {
+    override val onboardingComplete = MutableStateFlow(onboarding)
+    override val themePreference = MutableStateFlow(ThemePreference.SYSTEM)
+    override val dynamicColor = MutableStateFlow(true)
+    override var lastCompressionSettings = CompressionSettings()
+    override fun setDynamicColor(enabled: Boolean) { dynamicColor.value = enabled }
+    override fun rememberCompressionSettings(settings: CompressionSettings) { lastCompressionSettings = settings }
+    override fun setOnboardingComplete() { onboardingComplete.value = true }
+    override fun setThemePreference(preference: ThemePreference) { themePreference.value = preference }
+  }
+
   private class FakeRepository : ImageRepository {
     override val history = MutableStateFlow(emptyList<CompressionHistoryEntity>())
     override val batch = MutableStateFlow<BatchSnapshot?>(null)
     var compressionCalls = 0; var quality = 0; var cancelled = false; var saveCalls = 0; var dismissCalls = 0
     var result: CompressedImage? = null
+    var resultReads = 0; var initializeCalls = 0
+    var beforeInitialize: suspend () -> Unit = {}
     var initializeFailure: Exception? = null
     var compress: suspend (List<SelectedImage>, CompressionSettings) -> Unit = { _, _ -> }
     var save: suspend (CompressedImage) -> CompressedImage = { it }
     var inspect: suspend (List<Uri>) -> SelectionResult = { uris -> SelectionResult(uris.map { SelectedImage(it, it.lastPathSegment!!, 1000, 10, 10, "JPEG") }, emptyList()) }
-    override suspend fun initialize() { initializeFailure?.let { throw it } }
+    override suspend fun initialize() { initializeCalls++; beforeInitialize(); initializeFailure?.let { throw it } }
     override suspend fun refreshAvailability() { }
     override suspend fun inspectImages(uris: List<Uri>) = inspect(uris)
     override suspend fun compressImages(images: List<SelectedImage>, settings: CompressionSettings) { compressionCalls++; compress(images, settings) }
     override suspend fun retryBatch() { }
     override suspend fun dismissBatch() { dismissCalls++ }
     override suspend fun saveToGallery(image: CompressedImage): CompressedImage { saveCalls++; return save(image) }
-    override suspend fun getResult(id: Long) = result
+    override suspend fun getResult(id: Long): CompressedImage? { resultReads++; return result }
     override suspend fun shareUri(id: Long): Uri = error("Not used")
     override suspend fun deleteHistory(item: CompressionHistoryEntity) { }
     override suspend fun clearHistory() { }

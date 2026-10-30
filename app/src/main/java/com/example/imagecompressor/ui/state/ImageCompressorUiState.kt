@@ -37,6 +37,7 @@ data class ImageCompressorUiState(
   val compressedImages: List<CompressedImage> = emptyList(),
   val compareImage: CompressedImage? = null,
   val compareReturnScreen: AppScreen = AppScreen.RESULTS,
+  val resultsReturnScreen: AppScreen = AppScreen.COMPRESSION_SETTINGS,
   val history: List<CompressionHistoryEntity> = emptyList(),
   val themePreference: ThemePreference = ThemePreference.SYSTEM,
   val dynamicColor: Boolean = true,

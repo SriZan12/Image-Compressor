@@ -1,7 +1,8 @@
 # Shrink design system and adaptive UI
 
-The latest [soft 3D icon update](soft-icons.md) implements the user's sculpted-icon
-reference for the launcher, brand artwork, navigation, and principal actions.
+The latest [vector icon and Home startup update](vector-icons-home.md) keeps the
+sculpted-icon style with native scalable assets and removes automatic navigation
+to previous results. The earlier [raster icon update](soft-icons.md) is historical.
 
 The current redesign starts with the [new six-step editor plan](editor-plan.md).
 See [Editor Step 1](editor-step-1.md) for Poppins, current app captures, component

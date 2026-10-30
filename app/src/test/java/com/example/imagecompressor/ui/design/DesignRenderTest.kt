@@ -50,6 +50,20 @@ import org.robolectric.annotation.GraphicsMode
 class DesignRenderTest {
   @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+  @Test fun homeKeepsPreviousResultsBehindAnExplicitAction() {
+    val photo = fixture()
+    val batch = BatchSnapshot("previous", CompressionSettings(), BatchStatus.COMPLETED,
+      listOf(BatchItem("one", photo.original, ItemStatus.COMPLETED, photo)))
+    var reviews = 0
+    screen(AppScreen.HOME) { HomeScreen(state(AppScreen.HOME).copy(batch = batch, compressedImages = listOf(photo)), it,
+      {}, {}, {}, { reviews++ }) }
+    compose.onNodeWithText("Choose photos").assertIsDisplayed()
+    assertEquals(0, reviews)
+    compose.onNodeWithText("Review previous photos").performClick()
+    assertEquals(1, reviews)
+    capture("home-previous-results")
+  }
+
   @Test fun homeSeparatesContinuingFromChoosingNewPhotos() {
     val photo = fixture()
     var continued = false
@@ -595,10 +609,8 @@ class DesignRenderTest {
   private fun awaitPreviews() {
     compose.waitUntil(timeoutMillis = 10_000) {
       compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Loading preview"), useUnmergedTree = true)
-        .fetchSemanticsNodes().isEmpty() &&
-        compose.onAllNodesWithTag("artwork-loading", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
+        .fetchSemanticsNodes().isEmpty()
     }
-    compose.onAllNodesWithTag("artwork-error", useUnmergedTree = true).assertCountEquals(0)
     compose.waitForIdle()
   }
 

@@ -16,7 +16,7 @@ import com.example.imagecompressor.ui.state.ImageCompressorUiState
 
 @Composable
 fun HomeScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSelectImages: () -> Unit,
-  onReviewSelection: () -> Unit, onOpenHistory: () -> Unit) {
+  onReviewSelection: () -> Unit, onOpenHistory: () -> Unit, onReviewResults: () -> Unit = {}) {
   ScreenColumn(modifier) {
     Spacer(Modifier.height(Space.xl))
     AppIcon(R.drawable.ic_shrink, size = 112.dp)
@@ -31,6 +31,11 @@ fun HomeScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onS
     } else {
       ActionButton(stringResource(R.string.select_photos), onSelectImages, Modifier.fillMaxWidth(), R.drawable.ic_add_photo_alternate,
         enabled = !state.isLoadingImages)
+    }
+    if (state.batch != null) {
+      TextButton(onReviewResults, Modifier.align(Alignment.CenterHorizontally), enabled = !state.isLoadingImages) {
+        Text(stringResource(R.string.review_previous_photos))
+      }
     }
     if (state.isLoadingImages) PhotoOpeningStatus()
     PrivacyNote()

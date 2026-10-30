@@ -31,6 +31,7 @@ class ImageCompressionFeature(
     job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
       state.update {
         val ready = if (resetResults) it.copy(batch = null, compressedImages = emptyList(), compareImage = null,
+          resultsReturnScreen = AppScreen.COMPRESSION_SETTINGS,
           progress = BatchProgress(total = it.selectedImages.size), saveErrors = emptyMap()) else it
         ready.copy(screen = AppScreen.RESULTS, isCompressing = true, isCancelling = false, message = null)
       }
