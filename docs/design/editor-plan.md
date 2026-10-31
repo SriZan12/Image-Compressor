@@ -40,7 +40,7 @@ vary between services. The app must not promise approval by an upload portal.
 | 3. Live temporary editing session | Add responsive size feedback, cancellation of superseded work, bounded target-size search, and temporary preview ownership. | Slider interaction stays responsive; estimates are clearly labelled; only the latest source/settings can complete; work and memory are bounded; a drag does not create history entries or permanent outputs. Verify target search and cleanup with meaningful tests. | Implemented and host-validated. Device latency remains pending. See [Step 3](editor-step-3.md). |
 | 4. Automatic result and export | Connect quick/custom limits and slider changes to preparation, then export the verified result directly from the editor. | Selecting 500 KB starts work without another confirmation; export uses the exact verified artifact currently shown; stale results cannot save/share; impossible limits have a useful explanation; saved location and original preservation are clear. | Implemented and host-validated for single photos. Device checks remain pending. See [Step 4](editor-step-4.md). |
 | 5. Supporting flows and accessibility | Align first launch, home, selection, comparison, recent photos, settings, batch handling, and failures with the editor. | Clear next actions across flows; state survives rotation/resizing appropriately; keyboard, split-screen, landscape, large text, reduced motion, contrast, and TalkBack checks pass on the supported device range. | Implemented and host-validated. Physical-device accessibility checks remain pending. See [Step 5](editor-step-5.md). |
-| 6. Production validation | Run regression, performance, privacy/storage, permission, recovery, and release-readiness checks. | Record executed checks and their environments; close critical failures; verify real-device latency, memory, cancellation, background/interruption behavior, accessibility, and release configuration. Document any remaining release gates. | Not started. |
+| 6. Production validation | Run regression, performance, privacy/storage, permission, recovery, and release-readiness checks. | Record executed checks and their environments; close critical failures; verify real-device latency, memory, cancellation, background/interruption behavior, accessibility, and release configuration. Document any remaining release gates. | Release candidate built and host-validated; metadata, recovery and backup hardening complete. Signing, physical-device acceptance and publication remain gates. See [Step 6 execution record](../validation/editor-step-6-execution.md). |
 
 Each step ends with actual app/component captures, a concise explanation of the
 change, relevant test results, and a review checkpoint. Step 1 approval does not
@@ -71,4 +71,7 @@ photos entry; retries reuse that entry. The original remains untouched. Multiple
 photos offer a selectable live sample and **Prepare N photos** to run the full
 batch once. Limits apply to each photo; totals and individual results are shown
 after preparation. Step 5 aligns supporting flows and host-tested accessibility.
-Device latency and release-readiness checks remain later validation work.
+Step 6 adds optimized release/QA builds and verified packaging, closes metadata
+allocation and pending-save recovery gaps, and records executed host checks.
+Physical-device acceptance and owner-controlled signing remain required before
+publication; see the [release guide](../release/README.md).

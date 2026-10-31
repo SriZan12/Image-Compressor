@@ -51,7 +51,7 @@ class AccessibilitySmokeTest {
         originalUri = selected.id, compressedUri = photo.outputUri.toString(), localPath = output.path,
         originalSizeBytes = selected.sizeBytes, compressedSizeBytes = photo.compressedSizeBytes,
         width = 512, height = 512, outputFormat = "JPEG", availability = "RETAINED")
-      var state by mutableStateOf(ImageCompressorUiState(AppScreen.ONBOARDING, isInitializing = false,
+      var state by mutableStateOf(ImageCompressorUiState(AppScreen.HOME, isInitializing = false,
         compressionSettings = settings, history = listOf(recent)))
       var saves = 0
       var shares = 0
@@ -87,7 +87,6 @@ class AccessibilitySmokeTest {
         } }
       }
       // Actions trigger root-view checks; no error checks are suppressed.
-      onNodeWithText("Not now").performScrollTo().performClick()
       onNodeWithText("Choose photos").performClick()
       onNodeWithText("Advanced").performScrollTo().performClick()
       onNodeWithContentDescription("Photo detail").performScrollTo()
@@ -109,6 +108,9 @@ class AccessibilitySmokeTest {
       assertEquals(1, shares)
       onNodeWithContentDescription("Back").performClick()
       onNodeWithText("Settings").performClick()
+      for (theme in listOf("Light", "Dark", "System")) {
+        onNodeWithText(theme).performScrollTo().performClick().assertIsSelected()
+      }
       onNodeWithText("Match phone colors").performScrollTo().performClick()
       onNodeWithText("Recent").performClick()
       onNodeWithContentDescription("Share Photo").performScrollTo().performClick()

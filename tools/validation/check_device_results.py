@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PACKAGE = "com.example.imagecompressor.validation."
-WORKFLOW = (PACKAGE + "NativeWorkflowTest", "selectedPhotoCompressesSavesOnceAndSurvivesActivityRecreation")
+WORKFLOW = (PACKAGE + "NativeWorkflowTest", "automaticPreviewExportsExactBytesOnceAndKeepsEditorSavedAfterRecreation")
 ACCESSIBILITY = {
     (PACKAGE + "AccessibilitySmokeTest", "lightScreensPassAccessibilityChecks"),
     (PACKAGE + "AccessibilitySmokeTest", "darkScreensPassAccessibilityChecks"),
@@ -17,14 +17,16 @@ ACCESSIBILITY = {
 def verify(directory, api):
     expected = {WORKFLOW} | (ACCESSIBILITY if api >= 34 else set())
     passed = set()
+    seen = set()
     for file in sorted(directory.rglob("*.xml")):
         for test in ET.parse(file).getroot().iter("testcase"):
             identity = (test.get("classname"), test.get("name"))
+            if identity in seen:
+                raise ValueError(f"Duplicate result: {identity}; use a clean report directory")
+            seen.add(identity)
             if test.find("failure") is not None or test.find("error") is not None:
                 raise ValueError(f"Failed device test: {identity}")
             if test.find("skipped") is None:
-                if identity in passed:
-                    raise ValueError(f"Duplicate result: {identity}; use a clean report directory")
                 passed.add(identity)
     if expected - passed:
         raise ValueError(f"Required tests missing or skipped on API {api}: {sorted(expected - passed)}")

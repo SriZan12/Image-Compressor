@@ -12,9 +12,9 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = "com.example.imagecompressor"
+APP = "com.srizan12.shrink"
 TEST = APP + ".test/androidx.test.runner.AndroidJUnitRunner"
-CLASS = APP + ".benchmark.CompressionBaselineTest"
+CLASS = "com.example.imagecompressor.benchmark.CompressionBaselineTest"
 SMOKE_CASES = {
     "photo-jpeg-q80", "photo-webp-q80", "chart-png", "alpha-png", "alpha-jpeg-white",
     "photo-target-50kib", "noise-target-10kib", "impossible-png-target", "corrupt-input",

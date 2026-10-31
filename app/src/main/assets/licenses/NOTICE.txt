@@ -1,0 +1,9 @@
+Shrink third-party assets
+
+Poppins Regular, Medium and SemiBold are distributed under SIL Open Font License
+1.1. The original copyright notice and full licence are in poppins_ofl.txt.
+
+The simple utility glyphs are adapted from Google Material Symbols Rounded and
+converted to Android vector drawables. Their Apache License 2.0 is included in
+material_symbols_apache_2.txt. The shaded color illustrations and custom launcher
+mark are original project artwork.

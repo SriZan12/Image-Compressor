@@ -16,9 +16,13 @@ import com.example.imagecompressor.data.model.OutputFormat
 import com.example.imagecompressor.data.model.SelectedImage
 import com.example.imagecompressor.data.model.TargetSizeStatus
 import com.example.imagecompressor.util.compression.ImageContainer
+import com.example.imagecompressor.util.compression.CompressionPolicy
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.util.zip.CRC32
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
@@ -203,6 +207,29 @@ class ImageCompressorTest {
       assertNoTemporaryFiles()
     }
     assertTrue(File(context.cacheDir, "compressed").listFiles().orEmpty().none { it.isFile })
+  }
+
+  @Test fun oversizedEmbeddedMetadataIsRejectedOnOpeningAndCompressionWithoutChangingTheSource() = runBlocking {
+    val original = fixture("chart.png").readBytes()
+    val type = "eXIf".toByteArray(Charsets.US_ASCII)
+    val payload = ByteArray((CompressionPolicy.MAX_METADATA_BYTES + 1).toInt())
+    val chunk = ByteArrayOutputStream().apply {
+      DataOutputStream(this).apply {
+        writeInt(payload.size); write(type); write(payload)
+        writeInt(CRC32().apply { update(type); update(payload) }.value.toInt())
+      }
+    }.toByteArray()
+    val input = File(inputDir, "oversized-metadata.png").apply {
+      writeBytes(original.copyOfRange(0, 33) + chunk + original.copyOfRange(33, original.size))
+    }
+    val before = input.readBytes()
+    try { compressor.inspect(uri(input)); fail("Opening must bound metadata before EXIF parsing") }
+    catch (failure: IOException) { assertTrue(failure.message!!.contains("embedded information")) }
+    val untrusted = SelectedImage(uri(input), input.name, input.length(), 320, 192, "PNG")
+    try { compressor.compress(untrusted, CompressionSettings()); fail("Compression must revalidate metadata") }
+    catch (failure: IOException) { assertTrue(failure.message!!.contains("embedded information")) }
+    assertArrayEquals(before, input.readBytes())
+    assertNoTemporaryFiles()
   }
 
   @Test fun outputFailureDeletesCandidatesAndKeepsOriginal() = runBlocking {

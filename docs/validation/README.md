@@ -1,5 +1,11 @@
 # Step 6 — validation and release gates
 
+This guide originally accompanied the first production plan. The redesigned
+editor's current [Step 6 execution record](editor-step-6-execution.md) and
+[release guide](../release/README.md) supersede its older counts and debug-only
+CI examples below. CI now also builds optimized release artifacts and runs device
+smoke checks against the isolated optimized QA application.
+
 Step 6 adds continuous checks and repeatable device validation. It does **not**
 establish production readiness by compiling tests. Device execution, physical
 performance and human accessibility review remain open gates.

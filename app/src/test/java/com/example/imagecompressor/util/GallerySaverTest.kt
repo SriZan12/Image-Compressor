@@ -94,6 +94,32 @@ class GallerySaverTest {
     assertEquals(published, saver.recover(published))
     assertEquals(1, provider.rows.size)
   }
+
+  @Test fun revokedPendingExportDoesNotBlockRecoveryOfOtherPhotos() = runBlocking {
+    val unavailable = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+      put(MediaStore.Images.Media.IS_PENDING, 1)
+    })!!
+    provider.deniedQueries += unavailable
+    assertNull(saver.recover(unavailable))
+    val published = saver.save(image, null, {}, {})
+    assertEquals(published, saver.recover(published))
+    assertEquals(100_000L, File(image.outputFilePath).length())
+  }
+
+  @Test fun recoveryAndRetryNeverModifyAnotherAppsPendingPhoto() = runBlocking {
+    val other = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+      put(MediaStore.Images.Media.IS_PENDING, 1)
+    })!!
+    val otherRow = provider.rows.getValue(checkNotNull(other.lastPathSegment).toLong())
+    otherRow.values.put(MediaStore.Images.Media.OWNER_PACKAGE_NAME, "other.photo.app")
+    otherRow.file.writeText("Keep the other app's photo")
+    assertNull(saver.recover(other))
+    val saved = saver.save(image, other, {}, {})
+    assertNotEquals(other, saved)
+    assertEquals("Keep the other app's photo", otherRow.file.readText())
+    assertEquals(1, otherRow.values.getAsInteger(MediaStore.Images.Media.IS_PENDING))
+    assertEquals(2, provider.rows.size)
+  }
 }
 
 /** Exercises real ContentResolver/PFD streaming and MediaStore publication protocol with controlled failures. */
@@ -102,6 +128,7 @@ class TestMediaProvider : ContentProvider() {
   val rows = mutableMapOf<Long, Row>()
   var inserts = 0
   var failPublication = false
+  val deniedQueries = mutableSetOf<Uri>()
   override fun onCreate() = true
   override fun getType(uri: Uri) = "image/jpeg"
   override fun insert(uri: Uri, values: ContentValues?): Uri {
@@ -111,6 +138,7 @@ class TestMediaProvider : ContentProvider() {
     return Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id.toString())
   }
   override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
+    if (uri in deniedQueries) throw SecurityException("Access revoked")
     val columns = projection ?: arrayOf(MediaStore.Images.Media._ID)
     val cursor = MatrixCursor(columns)
     val id = uri.lastPathSegment?.toLongOrNull()

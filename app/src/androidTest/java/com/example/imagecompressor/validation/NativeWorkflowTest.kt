@@ -40,6 +40,7 @@ class NativeWorkflowTest {
     compose.runOnUiThread { model = ViewModelProvider(compose.activity)[ImageCompressorViewModel::class.java] }
     compose.waitUntil(15_000) { !model.uiState.value.isInitializing }
     assertNull(model.uiState.value.initializationError)
+    assertEquals("A fresh launch must finish splash on Home", AppScreen.HOME, model.uiState.value.screen)
     // Fail visibly on an occupied installation; never clear someone else's results to run a test.
     runBlocking {
       assertTrue("Use a dedicated empty test installation", repository.history.first().isEmpty())
@@ -56,7 +57,6 @@ class NativeWorkflowTest {
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", input)
     try {
       compose.runOnUiThread {
-        model.completeOnboarding()
         model.updateCompressionSettings(CompressionSettings())
         // The system picker is outside this test; exercise its real URI handoff boundary.
         model.addSelectedImages(listOf(uri))

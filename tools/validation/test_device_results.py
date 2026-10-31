@@ -1,3 +1,4 @@
+import re
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -43,6 +44,21 @@ class DeviceResultsTest(unittest.TestCase):
         (self.directory / "TEST-stale.xml").write_bytes((self.directory / "TEST-device.xml").read_bytes())
         with self.assertRaises(ValueError):
             verify(self.directory, 31)
+
+    def test_skipped_stale_duplicate_cannot_be_hidden_by_a_passing_report(self):
+        self.write({WORKFLOW}, "skipped")
+        (self.directory / "TEST-stale.xml").write_bytes((self.directory / "TEST-device.xml").read_bytes())
+        self.write({WORKFLOW})
+        with self.assertRaisesRegex(ValueError, "Duplicate result"):
+            verify(self.directory, 31)
+
+    def test_required_names_match_the_current_instrumentation_sources(self):
+        source_root = Path(__file__).resolve().parents[2] / "app/src/androidTest/java"
+        for cls, name in {WORKFLOW} | ACCESSIBILITY:
+            source = source_root / (cls.replace(".", "/") + ".kt")
+            with self.subTest(test=f"{cls}.{name}"):
+                self.assertTrue(source.is_file())
+                self.assertRegex(source.read_text(), rf"@Test\s+fun\s+{re.escape(name)}\s*\(")
 
 
 if __name__ == "__main__":

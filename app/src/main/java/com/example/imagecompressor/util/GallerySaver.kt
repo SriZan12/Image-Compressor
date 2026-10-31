@@ -31,15 +31,31 @@ class GallerySaver(private val context: Context) : GalleryExporter {
     resolver.openAssetFileDescriptor(uri, "r")?.use { it.length != 0L } ?: false
   } catch (_: Exception) { false }
 
-  private fun pending(uri: Uri): Boolean? = resolver.query(uri,
-    arrayOf(MediaStore.Images.Media.IS_PENDING), null, null, null)?.use {
-    if (it.moveToFirst()) it.getInt(0) != 0 else null
+  /** A journal entry is only reusable/deletable while it still names our own MediaStore row. */
+  private fun pending(uri: Uri): Boolean? {
+    val path = uri.pathSegments
+    if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY || path.size != 4 ||
+      path[1] != "images" || path[2] != "media" || path.last().toLongOrNull() == null) return null
+    return try {
+      resolver.query(uri, arrayOf(MediaStore.Images.Media.IS_PENDING, MediaStore.Images.Media.OWNER_PACKAGE_NAME),
+        null, null, null)?.use {
+        if (it.moveToFirst() && it.getString(1) == context.packageName) it.getInt(0) != 0 else null
+      }
+    } catch (_: SecurityException) {
+      // A revoked/deleted destination must not prevent restoring all other retained photos.
+      null
+    }
   }
 
-  override fun recover(uri: Uri): Uri? = when (pending(uri)) {
-    false -> uri.takeIf(::isReadable)
-    true -> { resolver.delete(uri, null, null); null }
-    null -> null
+  override fun recover(uri: Uri): Uri? = try {
+    when (pending(uri)) {
+      false -> uri.takeIf(::isReadable)
+      true -> { resolver.delete(uri, null, null); null }
+      null -> null
+    }
+  } catch (_: SecurityException) {
+    // Access can change after the ownership query. Keep the retained original result usable.
+    null
   }
 
   override suspend fun save(image: CompressedImage, pendingUri: Uri?,

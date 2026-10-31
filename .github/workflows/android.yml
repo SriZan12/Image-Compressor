@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   host:
-    name: Host tests, lint, and APKs
+    name: Host tests, lint, and release artifacts
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -26,8 +26,20 @@ jobs:
         run: |
           python3 -m unittest discover -s tools/benchmark -p 'test_*.py' -v
           python3 -m unittest discover -s tools/validation -p 'test_*.py' -v
+          python3 -m unittest discover -s tools/release -p 'test_*.py' -v
       - name: Run host checks and build test APKs
-        run: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-project" clean testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+        run: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-project" clean testDebugUnitTest testReleaseUnitTest lintDebug lintRelease assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease
+      - name: Inspect optimized release artifacts
+        run: |
+          mkdir -p app/build/release-verification
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print app/build/outputs/apk/release/app-release-unsigned.apk > app/build/release-verification/manifest.xml
+          python3 tools/release/check_artifacts.py --apk app/build/outputs/apk/release/app-release-unsigned.apk --aab app/build/outputs/bundle/release/app-release.aab --manifest app/build/release-verification/manifest.xml --mapping app/build/outputs/mapping/release/mapping.txt --output app/build/release-verification/report.json
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Validate the App Bundle with the pinned Android tool
+        run: |
+          curl --fail --location --retry 2 https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o "$RUNNER_TEMP/bundletool.jar"
+          printf '%s  %s\n' 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29' "$RUNNER_TEMP/bundletool.jar" | sha256sum -c -
+          java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle=app/build/outputs/bundle/release/app-release.aab
       - name: Upload diagnostics and native renders
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -38,16 +50,20 @@ jobs:
             app/build/reports/
             app/build/test-results/
             app/build/design/
-      - name: Upload debug APKs
+            app/build/release-verification/
+      - name: Upload candidates and test APKs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: debug-apks-${{ github.run_id }}
+          name: unsigned-release-and-debug-${{ github.run_id }}
           retention-days: 7
           if-no-files-found: error
-          path: app/build/outputs/apk/
+          path: |
+            app/build/outputs/apk/
+            app/build/outputs/bundle/release/
+            app/build/outputs/mapping/release/
 
   device:
-    name: Android API ${{ matrix.api }} smoke checks
+    name: Optimized QA API ${{ matrix.api }} smoke checks
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -72,7 +88,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-device" clean connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.example.imagecompressor.validation
+          script: bash gradlew --no-daemon --console=plain --project-cache-dir "$RUNNER_TEMP/gradle-device" clean connectedQaAndroidTest -PandroidTestBuildType=qa -Pandroid.testInstrumentationRunnerArguments.package=com.example.imagecompressor.validation
       - name: Require the expected tests to have executed
         run: python3 tools/validation/check_device_results.py app/build/outputs/androidTest-results --api ${{ matrix.api }}
       - name: Upload device reports even on failure

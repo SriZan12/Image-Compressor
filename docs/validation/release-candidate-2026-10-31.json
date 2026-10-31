@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "dateUtc": "2026-10-31",
+  "product": "Shrink",
+  "applicationId": "com.srizan12.shrink",
+  "qaApplicationId": "com.srizan12.shrink.qa",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minSdk": 31,
+  "targetSdk": 37,
+  "source": {
+    "baseCommit": "848418f4e04e34f08a0631837cd72263072a679b",
+    "workingTreeDirty": true,
+    "buildAndValidationFiles": 185,
+    "sourceManifestSha256": "209da2f44d9951c80511fb2b78eeb3a955ea8fa29786ae782cd0fd2031b6d6a2",
+    "hashDefinition": "SHA-256 of UTF-8 compact sorted-key JSON file/hash entries, sorted by relative path, without final newline; source-manifest.json in handoff contains this list. Excludes docs, generated outputs and local machine configuration."
+  },
+  "environment": {
+    "execution": "managed Linux cloud workspace",
+    "jdk": "21.0.13+9 (Kotlin/JVM target 17)",
+    "gradle": "9.5.1",
+    "androidBuildTools": "36.0.0",
+    "deviceConnected": false,
+    "hardwareAccelerationAvailable": false
+  },
+  "hostTests": {
+    "debug": {
+      "tests": 222,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 221
+    },
+    "release": {
+      "tests": 222,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 221
+    }
+  },
+  "toolTests": {
+    "benchmark": 14,
+    "deviceResultGuard": 6,
+    "artifactGuard": 17,
+    "failures": 0
+  },
+  "lint": {
+    "debug": {
+      "errors": 0,
+      "warnings": 36,
+      "issueTypes": {
+        "NewerVersionAvailable": 3,
+        "UnusedResources": 31,
+        "UseTomlInstead": 2
+      }
+    },
+    "release": {
+      "errors": 0,
+      "warnings": 37,
+      "issueTypes": {
+        "NewerVersionAvailable": 3,
+        "UnusedResources": 32,
+        "UseTomlInstead": 2
+      }
+    }
+  },
+  "checks": {
+    "actionlint": "passed",
+    "releaseApkAndBundleBuild": "passed",
+    "optimizedQaAndInstrumentationBuild": "passed",
+    "requiredInstrumentedTestNamesRetainedInDex": "passed; not executed on a device",
+    "packagingGuard": "passed",
+    "bundletoolValidation": "passed (1.18.3)",
+    "zipalign16KiB": "passed",
+    "nativeElfLoadAlignment": "16 KiB for all four packaged ABI libraries",
+    "qaAppAndTestSignatures": "verified; matching development certificate",
+    "qaCertificateSha256": "9da261d8d9227c800db2e98d279d25f262232e60411699c7cae74c30324e5e97",
+    "productionSigning": "unsigned; owner upload key not supplied",
+    "connectedTests": "not run; no device available",
+    "remoteCi": "configured, not executed in this task",
+    "publication": "not performed"
+  },
+  "artifacts": [
+    {
+      "file": "Shrink-1.0.0-QA.apk",
+      "bytes": 3466141,
+      "sha256": "53629ec5b1a6543f0f0142ba96dc9cfc3cf7c3bf16d6b7dbbbd8bd5389bb008d"
+    },
+    {
+      "file": "Shrink-1.0.0-QA-device-tests.apk",
+      "bytes": 14604138,
+      "sha256": "f847ae6250e7902e9d1eb5f5d01b127e16f8c7005efac47e3c43f81b92f77066"
+    },
+    {
+      "file": "Shrink-1.0.0-production-unsigned.apk",
+      "bytes": 3457718,
+      "sha256": "2c20ea418a2061026f66c02316de984687726aef4eee7ec24cbe61f6cda56ef9"
+    },
+    {
+      "file": "Shrink-1.0.0-production-unsigned.aab",
+      "bytes": 4702495,
+      "sha256": "30b525d97c6f766564fe58275f0f6cd9bcf321c9477f06ead6560f81458186d5"
+    },
+    {
+      "file": "mappings/release-mapping.txt",
+      "bytes": 38088230,
+      "sha256": "02d55b82f8d3b481fd269ed5f254ed07be4d9640040a5f834362a0172b806b13"
+    },
+    {
+      "file": "mappings/qa-mapping.txt",
+      "bytes": 38088488,
+      "sha256": "fdb740541214224c970b7204cf2c10b1c7b48f4bfaa1eaa653d4b6ffb92b5ca8"
+    }
+  ],
+  "releaseApproved": false,
+  "remainingGates": [
+    "Owner upload-key signing and fingerprint verification",
+    "Optimized native workflow and accessibility checks on devices",
+    "Physical quality, latency, peak memory, lifecycle and OEM acceptance",
+    "Publish privacy policy and complete Play Console declarations",
+    "Internal testing and Play pre-launch report review"
+  ]
+}

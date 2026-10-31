@@ -47,7 +47,8 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], application = Application::class, qualifiers = "w412dp-h915dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PhotoLoadingIntegrationTest {
-  @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+  @get:Rule(order = 0) val hostActivity = ComposeHostActivityRule()
+  @get:Rule(order = 1) val compose = createAndroidComposeRule<ComponentActivity>()
   private lateinit var loader: ImageLoader
 
   @After fun releaseLoader() {

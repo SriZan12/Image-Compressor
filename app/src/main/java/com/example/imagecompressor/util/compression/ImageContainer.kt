@@ -13,6 +13,15 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
   JPEG("image/jpeg", "JPEG"), PNG("image/png", "PNG"), WEBP("image/webp", "WEBP");
 
   companion object {
+    private val pngMetadata = setOf("eXIf", "iTXt", "iCCP", "tEXt", "zTXt")
+    private val webpMetadata = setOf("EXIF", "XMP ", "ICCP")
+
+    private fun metadataTotal(previous: Long, additional: Long): Long {
+      if (additional > CompressionPolicy.MAX_METADATA_BYTES - previous)
+        throw IOException("This photo has too much embedded information. Save a new copy and try again.")
+      return previous + additional
+    }
+
     fun validate(file: File, checkpoint: () -> Unit = {}): ImageContainer =
       file.inputStream().use { validate(it, file.length(), checkpoint) }
 
@@ -53,6 +62,7 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
       var inScan = false
       var sawScan = false
       var reads = 0
+      var metadataBytes = 0L
       fun byte(): Int {
         if (++reads % 65536 == 0) checkpoint()
         return input.readUnsignedByte()
@@ -78,6 +88,8 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
         if (marker == 1) continue // Standalone TEM marker.
         val length = input.readUnsignedShort() - 2
         if (length < 0) throw IOException("The JPEG structure is damaged.")
+        if (marker in 0xe0..0xef || marker == 0xfe)
+          metadataBytes = metadataTotal(metadataBytes, length.toLong())
         var remaining = length
         while (remaining > 0) {
           val skipped = input.skipBytes(remaining)
@@ -93,6 +105,7 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
       var remaining = totalLength - 8
       var first = true
       var sawData = false
+      var metadataBytes = 0L
       val buffer = ByteArray(65536)
       while (remaining >= 12) {
         checkpoint()
@@ -101,6 +114,8 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
         val type = String(typeBytes, Charsets.US_ASCII)
         if (length > remaining - 12 || (first && (type != "IHDR" || length != 13L))) throw EOFException()
         if (type == "acTL" || type == "fcTL" || type == "fdAT") throw IOException("Animated PNG images are not supported. Choose a still image.")
+        // Reject before reading/copying payloads that EXIF or color-profile readers allocate whole.
+        if (type in pngMetadata) metadataBytes = metadataTotal(metadataBytes, length)
         first = false
         val crc = CRC32().apply { update(typeBytes) }
         var unread = length
@@ -131,6 +146,7 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
       input.readInt() // WEBP signature.
       var position = 12L
       var sawPixels = false
+      var metadataBytes = 0L
       while (position < end) {
         checkpoint()
         if (end - position < 8) throw EOFException()
@@ -138,6 +154,7 @@ internal enum class ImageContainer(val mimeType: String, val label: String) {
         val chunkLength = unsignedLittleInt()
         val next = position + 8 + chunkLength + (chunkLength and 1)
         if (next > end) throw EOFException()
+        if (type in webpMetadata) metadataBytes = metadataTotal(metadataBytes, chunkLength)
         val flags = if (type == "VP8X" && chunkLength > 0) input.readUnsignedByte() else null
         if (type == "ANIM" || type == "ANMF" ||
           (flags != null && flags and 2 != 0)) {

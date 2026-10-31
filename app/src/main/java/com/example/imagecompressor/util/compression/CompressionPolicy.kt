@@ -64,6 +64,8 @@ internal enum class ExifOrientation(val value: Int, val swapsAxes: Boolean = fal
 
 internal object CompressionPolicy {
   const val MAX_INPUT_BYTES = 100L * 1024 * 1024
+  // EXIF/XMP/profile parsers may copy a whole metadata chunk even when pixels are sampled.
+  const val MAX_METADATA_BYTES = 4L * 1024 * 1024
   const val MAX_INPUT_PIXELS = 50_000_000L
   const val MAX_EDGE = 16_384
   const val MAX_WORKING_PIXELS = 16_000_000L

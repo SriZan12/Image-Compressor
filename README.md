@@ -15,8 +15,11 @@ bytes, and cancellation when settings change. [Step 4](docs/design/editor-step-4
 connects **Save photo**, **Share**, and **Compare with original** directly to the
 verified single-photo result. [Step 5](docs/design/editor-step-5.md) aligns the
 supporting screens, adds selectable batch previews, preserves work on picker
-cancellation, and adapts navigation and actions for large text. Device validation
-remains pending.
+cancellation, and adapts navigation and actions for large text.
+[Step 6](docs/validation/editor-step-6-execution.md) adds production hardening,
+optimized release/QA builds, artifact checks, and current verification evidence.
+See the [release guide](docs/release/README.md) for signing and the remaining
+physical-device and publication gates.
 
 The [scalable icon and startup update](docs/design/vector-icons-home.md) uses native
 vectors for the launcher, navigation, themes, and actions. New sessions open Home;
@@ -41,7 +44,7 @@ checks are separate from this new editor sequence.
 - Per-image batch outcomes, cancellation, retry and interruption recovery
 - Durable retained results, duplicate-safe gallery saving and checked sharing
 - Room-backed history with availability status and a non-destructive schema migration
-- Optional privacy onboarding, system/light/dark themes and Material You wallpaper colors
+- Direct Home startup, system/light/dark themes and Material You wallpaper colors
 - Android 12+ support
 
 ## Run the app
@@ -58,6 +61,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk`.
+The production application ID is `com.srizan12.shrink`. The optimized QA install
+uses `com.srizan12.shrink.qa` and separate data; previous example-ID development
+installs remain separate.
 
 ## Production readiness
 
@@ -84,7 +90,9 @@ Physical-device and accessibility release gates remain open; the
 ```bash
 python3 -m unittest discover -s tools/benchmark -p 'test_*.py' -v
 python3 -m unittest discover -s tools/validation -p 'test_*.py' -v
-bash gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+python3 -m unittest discover -s tools/release -p 'test_*.py' -v
+bash gradlew testDebugUnitTest testReleaseUnitTest lintDebug lintRelease \
+  assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease
 ```
 
 ## Architecture

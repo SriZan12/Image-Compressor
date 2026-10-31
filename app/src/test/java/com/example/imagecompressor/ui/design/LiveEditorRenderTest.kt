@@ -57,7 +57,8 @@ import org.robolectric.shadows.ShadowDialog
 @Config(sdk = [35], application = Application::class, qualifiers = "w412dp-h915dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class LiveEditorRenderTest {
-  @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+  @get:Rule(order = 0) val hostActivity = ComposeHostActivityRule()
+  @get:Rule(order = 1) val compose = createAndroidComposeRule<ComponentActivity>()
   private val context get() = RuntimeEnvironment.getApplication()
   private lateinit var loader: ImageLoader
   private var activeSession: LiveEditorSession? = null

@@ -1,5 +1,11 @@
 # Production readiness plan
 
+Current status (31 October 2026): the final editor validation and release-candidate
+work is recorded in [the current execution report](validation/editor-step-6-execution.md)
+and [release guide](release/README.md). The owner selected `com.srizan12.shrink`
+for publication. The original stage descriptions and counts below are historical;
+physical acceptance and owner-controlled signing remain separate release gates.
+
 ## Product decisions
 
 Updated 2026-10-30 after plan approval.
