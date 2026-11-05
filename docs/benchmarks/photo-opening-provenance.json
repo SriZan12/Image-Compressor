@@ -1,0 +1,16 @@
+{
+  "baseCommit": "2af4cd36b8c20be5193174034acfa944a00d9780",
+  "note": "After source includes uncommitted Step 1 and Step 2 changes; hashes identify the measured code. This is host evidence, not phone latency.",
+  "beforeSourceSha256": {
+    "app/src/main/java/com/example/imagecompressor/util/ImageCompressor.kt": "c6230a2b041f8ff5338d063e162e42d5f8f92c1216c87e255ca28231af9806aa",
+    "app/src/main/java/com/example/imagecompressor/util/compression/ImageContainer.kt": "b1e5e11e3a61eacd31f3d4d0a6f7ed06b682bc0acf8294e746dc838fc59cf6ff"
+  },
+  "afterSourceSha256": {
+    "app/src/main/java/com/example/imagecompressor/util/ImageCompressor.kt": "8c38cacb36fd25220e4b74b82cceceafb8f212b110ba48693ed4b3f117edf1bd",
+    "app/src/main/java/com/example/imagecompressor/util/compression/ImageContainer.kt": "9c82f52e9b6f1d39010e3e6aebbf684e9385f83d97f78b71684a3ffa0f000b90",
+    "app/src/main/java/com/example/imagecompressor/ui/components/PreviewImageRequest.kt": "98813992f960ea81e226ef23bb72d51c2771a7c48e140c4bbb04c34ea393ccfe",
+    "app/src/main/java/com/example/imagecompressor/ui/components/SharedUiComponents.kt": "28db6e7140d50df7e2b727aa062978256b8c61dd7d37bea3b8d34f4e1541e397",
+    "app/src/main/java/com/example/imagecompressor/ui/components/ComparisonViewer.kt": "f95950297c7bec7c72fb961ff67fbbec6004675afaa75b6065a12c53c6acf76d",
+    "app/src/test/java/com/example/imagecompressor/benchmark/PhotoOpeningMeasurementTest.kt": "12e8ad74f144ae21d700677cd4fa416abeb5faadff963c3bf325ee4edef8a751"
+  }
+}

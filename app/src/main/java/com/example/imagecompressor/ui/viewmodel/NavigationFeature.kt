@@ -17,7 +17,15 @@ class NavigationFeature(
   }
 
   fun navigateTo(screen: AppScreen) {
-    state.update { it.copy(screen = screen, message = null) }
+    if (state.value.isCompressing || state.value.isSaving || state.value.isInitializing || state.value.isLoadingImages) return
+    state.update { current ->
+      val resultsOrigin = when {
+        screen != AppScreen.RESULTS || current.screen in setOf(AppScreen.RESULTS, AppScreen.IMAGE_COMPARE) -> current.resultsReturnScreen
+        current.screen == AppScreen.HOME -> AppScreen.HOME
+        else -> AppScreen.COMPRESSION_SETTINGS
+      }
+      current.copy(screen = screen, resultsReturnScreen = resultsOrigin, message = null)
+    }
   }
 
   fun goBack() {
@@ -25,10 +33,10 @@ class NavigationFeature(
       when (state.value.screen) {
         AppScreen.ONBOARDING,
         AppScreen.HOME -> AppScreen.HOME
-        AppScreen.PREVIEW -> AppScreen.HOME
-        AppScreen.COMPRESSION_SETTINGS -> AppScreen.PREVIEW
-        AppScreen.RESULTS -> AppScreen.COMPRESSION_SETTINGS
-        AppScreen.IMAGE_COMPARE -> AppScreen.RESULTS
+        AppScreen.PREVIEW -> if (state.value.selectedImages.isEmpty()) AppScreen.HOME else AppScreen.COMPRESSION_SETTINGS
+        AppScreen.COMPRESSION_SETTINGS -> AppScreen.HOME
+        AppScreen.RESULTS -> state.value.resultsReturnScreen
+        AppScreen.IMAGE_COMPARE -> state.value.compareReturnScreen
         AppScreen.HISTORY,
         AppScreen.SETTINGS -> AppScreen.HOME
       }
@@ -40,16 +48,23 @@ class NavigationFeature(
       it.copy(
         screen = AppScreen.HOME,
         selectedImages = emptyList(),
+        editorImageId = null,
+        editorRetained = null,
+        editorExportError = null,
         compressedImages = emptyList(),
         compareImage = null,
+        resultsReturnScreen = AppScreen.COMPRESSION_SETTINGS,
         progress = BatchProgress(),
+        batch = null,
+        saveErrors = emptyMap(),
         message = null,
       )
     }
   }
 
   fun openImageCompare(image: CompressedImage) {
-    state.update { it.copy(screen = AppScreen.IMAGE_COMPARE, compareImage = image, message = null) }
+    state.update { it.copy(screen = AppScreen.IMAGE_COMPARE, compareImage = image,
+      compareReturnScreen = if (it.screen == AppScreen.HISTORY) AppScreen.HISTORY else AppScreen.RESULTS, message = null) }
   }
 
   fun showMessage(message: String) {

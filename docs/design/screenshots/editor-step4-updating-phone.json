@@ -1,0 +1,7 @@
+{
+  "renderer": "Native Robolectric Compose; actual engine and Coil",
+  "fixture": "compression\/astronaut.png; see fixture NOTICE.md",
+  "originalBytes": 791555,
+  "targetBytes": 100000,
+  "previewState": "Updating"
+}

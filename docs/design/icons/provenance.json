@@ -1,0 +1,41 @@
+{
+  "created": "2026-10-30",
+  "generator": "OpenAI image_gen",
+  "reference": "User-provided soft 3D utility icon sheet (style reference only)",
+  "assets": [
+    {
+      "resource": "art_recent.png",
+      "sha256": "1ac95ee7817387b81051b3c687c419dda6624c0c2a8457cc9116972fe9469429",
+      "bytes": 1110382,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alpha": true,
+      "packaging": "Unchanged generated PNG; UI decoding uses its requested display size"
+    },
+    {
+      "resource": "art_settings.png",
+      "sha256": "de61130121a4c27ed346a9b00c9804004cdbe7ec863d9acf37264cfbc529caf1",
+      "bytes": 1192178,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alpha": true,
+      "packaging": "Unchanged generated PNG; UI decoding uses its requested display size"
+    },
+    {
+      "resource": "art_shrink.png",
+      "sha256": "68d253da8c305cca953475e8f92c0cb295d6645583646ff57df9142fe4369c0d",
+      "bytes": 1118787,
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "alpha": true,
+      "packaging": "Unchanged generated PNG; UI decoding uses its requested display size"
+    }
+  ],
+  "vector_companions": "Original Android vector artwork for small Add photo, Save, Share, Compare and Privacy icons; independent monochrome launcher mark"
+}

@@ -1,0 +1,12 @@
+# Local configuration and generated output (existing tracked files are unaffected).
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+.DS_Store
+__pycache__/
+*.pyc

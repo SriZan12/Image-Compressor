@@ -40,24 +40,44 @@ Request a review at a natural pause after the task is complete, without a prepar
 
 - `play/update/UpdateCoordinator.kt`: `UpdatePolicy` defines critical-update opt-in, priority, and staleness thresholds. `AppContainer` constructs the process-scoped coordinator; pass an explicit `UpdatePolicy(criticalUpdatesEnabled = true, ...)` there only when the product requires this policy.
 - `play/review/ReviewTracker.kt`: `ReviewPolicy` defines saves, successful sessions, first-tracked-use age, and cooldown. `AppContainer` constructs the tracker on the IO dispatcher; pass a policy there for controlled test builds. Defaults remain conservative for existing installations whose review tracking starts with this release.
-- `ui/PlayEngagementHost.kt`: the review pause is two seconds on HOME after selections/results are cleared and loading, compression, saving, sharing, permission/picker UI, update UI, and task messages have finished.
+- `play/PlayWorkSafety.kt` and `ui/PlayEngagementHost.kt`: the review pause is two seconds on Home after initialization, live-preview computation, loading, compression, saving, sharing, picker UI, update UI, task messages, and export errors have finished. A retained selection qualifies only when every current photo is durably saved with matching source metadata and settings. Returning Home keeps those receipts and selections; clearing them is not required. Restoring a saved editor/batch session must finish before any Play UI is considered.
 - Review metadata uses `review_` keys in the existing `image_compressor_preferences` file. The synchronous durable commit runs on IO before any Play review request. Storage errors or clock rollback suppress requests; API failures still consume the attempt cooldown.
 
-Updates re-query Play on foreground entry to recover download and installation state. Consent is limited to one automatic attempt per process session, with deliberate Settings retries allowed. Flexible installation requires clearing the current photo selection (for example, **Compress More**) and saving or discarding unsaved results. Only an explicit restart click calls `completeUpdate()`; a synchronous command guard prevents queued photo actions from starting while installation is pending. A terminal Play failure or cancellation releases that guard. Checks and review preparation time out after 15 seconds; installation completion has no local timeout that could accidentally unlock work before a late Play restart. A foreground reconciliation query runs 30 seconds after installation acknowledgment if the process is still alive; review preparation canceled by backgrounding consumes its reserved cooldown without surfacing an error.
+Updates re-query Play on foreground entry to recover download and installation state. Consent is limited to one automatic attempt per process session, with deliberate Settings retries allowed. Flexible installation requires ending the current photo-editing task and saving or explicitly discarding unsaved results. A fully saved selection permits restart from Home or Settings; its editor receipt or completed batch must match the current sources and settings. Retained history remains on disk; reopening a previous result does not authorize an update restart during editing. Only an explicit restart click calls `completeUpdate()`; a synchronous command guard prevents queued photo actions from starting while installation is pending. A terminal Play failure or cancellation releases that guard. Checks and review preparation time out after 15 seconds; installation completion has no local timeout that could accidentally unlock work before a late Play restart. A foreground reconciliation query runs 30 seconds after installation acknowledgment if the process is still alive; review preparation canceled by backgrounding consumes its reserved cooldown without surfacing an error.
+
+### Integration with the production editor
+
+The production app has an automatically computed, temporary single-photo preview, an explicit durable export step, and a separate recoverable batch workflow. An update restart must respect all three: preview work, retaining/saving/sharing the measured output, and batch processing or recovery. Preserve the exact measured image and its durable history receipt when integrating save callbacks; do not re-encode a photo merely to count a review event.
+
+Both live-editor **Save photo** and successful batch/gallery saves feed the review tracker. Count a newly confirmed gallery save once; retries that reuse an already published gallery copy, restored history, preview generation, retention without a gallery save, and sharing do not qualify. A partial batch failure still counts its confirmed successful saves, without counting the failed items. Review counts and the attempted-review cooldown are local durable metadata, independent of the Room history list; clearing or reloading that list must not manufacture qualifying usage or reset the cooldown.
+
+The current product supports Android 12+ (API 31), targeting API 37. `com.srizan12.shrink` is the permanent installed production application ID; `com.example.imagecompressor` remains the Kotlin namespace. The optimized device-test application is `com.srizan12.shrink.qa`, with separate storage and development signing. Its results cannot establish production Play ownership or update eligibility. Store links use the installed package name, so do not expect the unpublished QA ID to have a production store listing.
+
+The Play libraries do not add Android Internet or broad-media permissions. Their cached manifests add an unexported Play dialog activity; Google Play performs its own service/network interactions. Keep the merged-package privacy tests, FileProvider restrictions, backup exclusions, optimized build configuration, and release artifact checks intact. An SDK update must pass those checks again rather than receive a privacy-test exemption.
 
 ## Local validation
 
 With the Android SDK and the project's Java toolchains configured:
 
 ```bash
-bash ./gradlew testDebugUnitTest assembleDebug lintDebug assembleRelease
+python3 -m unittest discover -s tools/benchmark -p 'test_*.py' -v
+python3 -m unittest discover -s tools/validation -p 'test_*.py' -v
+python3 -m unittest discover -s tools/release -p 'test_*.py' -v
+bash ./gradlew testDebugUnitTest testReleaseUnitTest lintDebug lintRelease \
+  assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease
+bash ./gradlew -PandroidTestBuildType=qa assembleQa assembleQaAndroidTest
 ```
 
 In the prepared cloud environment, use its wrapper helper to keep tracked Windows SDK settings and Gradle caches unchanged:
 
 ```bash
-bash /workspace/.image-compressor/gradle.sh testDebugUnitTest assembleDebug lintDebug assembleRelease
+bash /workspace/.image-compressor/gradle.sh testDebugUnitTest testReleaseUnitTest \
+  lintDebug lintRelease assembleDebug assembleDebugAndroidTest assembleRelease bundleRelease
+bash /workspace/.image-compressor/gradle.sh -PandroidTestBuildType=qa \
+  assembleQa assembleQaAndroidTest
 ```
+
+Inspect the optimized APK/AAB and R8 mapping with the [release artifact procedure](release/README.md), including the forbidden-permission guard, 16 KB native/ZIP alignment, and pinned bundletool validation. The current cloud helper writes outputs to `app/build`; confirm the actual output directory when using a different environment. Release host tests exercise host bytecode, not the installed R8-optimized binary.
 
 Policy and coordinator tests should cover cooldown boundaries, future timestamps/clock rollback, successful-session accounting, durable reservation failure, duplicate requests, canceled update consent, download progress, downloaded-update recovery, stale query responses, and safe restart gates. These checks validate application logic; they do not establish that Google Play will offer an update or show a review dialog.
 
@@ -67,14 +87,14 @@ For SDK-focused device tests, Google's `FakeAppUpdateManager` can simulate updat
 
 Use a real Android device with a current Play Store and an eligible tester account. The app must be owned by that account and installed through the relevant Google Play testing channel. Keep the application ID, signing identity, and installation channel consistent between the installed and available builds. The available build must have a higher `versionCode`.
 
-The repository currently declares `com.example.imagecompressor` and `versionCode = 1`; the release owner must use the actual registered Play application and increment version codes for the two test builds. Do not replace an existing published application ID merely to test this integration.
+The production application ID is `com.srizan12.shrink`; the release configuration defaults to `versionCode = 1` and `versionName = "1.0.0"`. Build the two test versions with increasing `-PreleaseVersionCode` values, retaining the permanent ID and the correct Play signing lineage. Do not use the `.qa` build or change the published application ID to make update discovery pass. A locally debug-signed installation is not interchangeable with a Play-delivered release signed by the production app-signing key.
 
 ### Internal or closed testing track
 
 1. Publish a baseline build to an internal or closed test track and enroll the test account. Follow the opt-in link and install the baseline from Play.
 2. Publish a higher-version build on a track available to the same account. Allow Play distribution and device caching time; a successful publication is not immediate proof that an update is available on that device.
 3. Launch the installed baseline. Verify flexible consent appears once automatically, and canceling it does not repeatedly prompt on navigation, rotation, or foregrounding. A deliberate Settings check may retry and must explain the result.
-4. Accept the update. Exercise compression and saving while it downloads; verify useful progress feedback and no loss of the active task.
+4. Accept the update. Exercise automatic live previews, editor Save/Share, and batch compression/saving while it downloads; verify useful progress feedback and no loss or replacement of the measured image, durable result receipt, or recoverable batch.
 5. Rotate, background, and reopen the app while downloading. After download, verify **Restart to update** is recovered even after activity/process recreation. Verify the restart action remains blocked while work is in progress or unsaved, and only explicit user action installs it.
 6. Test immediate mode separately with the explicit critical policy enabled and an appropriately configured release priority. Set `inAppUpdatePriority` when creating the release through the Google Play Developer API; priority is a release attribute, not a client-side override. Account for the policy's staleness threshold. Confirm that an in-progress immediate flow resumes safely after returning to the app, without launching a second consent flow concurrently.
 
@@ -92,7 +112,7 @@ Internal app sharing can shorten flexible/immediate flow testing:
 ## Reviews through Google Play
 
 1. Publish the app on an internal test track, enroll the Google account, and install through Play. Use the Play Store's primary eligible account, with the app in its library. Existing reviews, account restrictions, distribution state, and Play's own conditions can affect availability.
-2. Perform real successful saves across the required sessions, then finish the task and reach the chosen natural pause. Test eligibility through a test-only policy configuration when necessary; preserve the production defaults in release builds.
+2. Perform real successful saves across the required sessions through both the live editor and batch workflow, then finish the task and reach the chosen natural pause. Verify duplicate saves reuse their durable receipts without increasing eligibility, and partial batch failures count only newly published copies. Test eligibility through a test-only policy configuration when necessary; preserve the production defaults in release builds.
 3. Verify that a review API attempt is made only once for the eligible pause/session. Recreate the activity or background the app while the request is pending. Verify no duplicate dialogs or stale-activity launches.
 4. Verify the persisted cooldown after success, request failure, API-flow failure, process death, and an attempt in which Play shows no dialog. Never label API completion as a submitted review.
 5. Internal test tracks allow review-flow testing without normal quota limitations. Still test the application's own cooldown, and do not rely on any particular visible dialog outcome in production.
@@ -108,19 +128,37 @@ Record the device, Android version, installed/available version codes, test acco
 - Play-installed baseline with no available update; higher available version; ineligible/sideloaded installation.
 - Missing or disabled Play Store, network unavailable, network interruption, cancellation, SDK failure, and rapid repeated Settings taps.
 - Rotation and navigation during consent/download/review preparation, background/resume, and process recreation with a downloaded update.
-- Compression, single save, partial batch save failure, permission prompt, photo picker, and share sheet while an update becomes ready.
+- Initialization/session restoration, automatic live-preview replacement, editor save/share retention, batch compression, partial batch save failure, photo picker, and share sheet while an update becomes ready. API 31+ scoped saving requires no storage-permission prompt.
 - Safe explicit restart and critical immediate-update recovery; never automatic completion of a flexible update.
 - Review eligibility/cooldown persistence, task-completion pause, suppression during any active update UI, and best-effort behavior when Play displays nothing.
 - TalkBack labels, progress announcements, large font settings, current light/dark themes, and reachable update/review Settings actions.
 - Offline compression and saving continue to work regardless of Play SDK availability.
 
-No local JVM test, successful APK build, or emulator without Play services proves this matrix. Complete it through Google Play before release.
+Run native workflow/accessibility checks on a dedicated empty optimized QA installation on API 31 and API 35:
 
-## Implementation validation record
+```bash
+bash ./gradlew -PandroidTestBuildType=qa connectedQaAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.package=com.example.imagecompressor.validation
+python3 tools/validation/check_device_results.py app/build/outputs/androidTest-results --api 35
+```
 
-Validated in the prepared Linux cloud environment on 2026-11-04:
+Use `--api 31` for the API 31 run. That API executes the native workflow; API 35 also executes the accessibility tests. Preserve current-run XML and the required-test guard result. Compile-only QA APK results, an empty test run, or intentional accessibility skips on API 31 are not equivalent to executed API 35 checks.
+
+Then repeat the relevant update/review matrix on the signed production candidate delivered through Play, including API 37 and at least one non-Google OEM device. Verify TalkBack, large fonts, safe restart, real picker/share destinations, and offline photo use. QA's distinct ID/signature prevents it from validating production Play flows. No local JVM test, successful APK build, or emulator without Play services proves this matrix.
+
+## Validation evidence and scope
+
+### Historical feature-branch checks
+
+The following checks ran in the prepared Linux cloud environment on 2026-11-04, **before** integrating the production-readiness branch and its live editor, storage model, application ID, and release hardening. They describe the original Play feature revision, not the merged candidate:
 
 - Local JUnit suite: 62 tests (36 update/coordinator, 18 review, 6 save-flow, 2 existing model tests); no failures, errors, or skipped tests.
 - Debug APK assembly, unsigned release APK assembly, and Android lint all passed. Lint reported four existing warnings and one hint, with no errors. The release resource compiler exposed an existing JPEG stored with a `.png` extension; renaming it to `figma_empty_home.jpg` preserved every image byte and the existing `R.drawable.figma_empty_home` identifier.
 - Production Play dialogs, store-delivered updates/restarts, UI accessibility, and offline/missing-Play behavior on a real device were not exercised here. The cloud emulator lacks hardware acceleration and has no usable Play testing setup. No fake-manager instrumentation/device tests were run.
-- The repository's release artifact is unsigned; publication, signing, Play ownership, tester enrollment, and the two-version distribution setup remain the release owner's responsibilities. No build was uploaded or published.
+- That revision's release artifact was unsigned. No build was uploaded or published.
+
+### Production integration validation
+
+See the [5 November merge validation record](validation/google-play-merge-2026-11-05.md) for the combined production/Play checks, test counts (including skips), artifact identity, and remaining device gates. The historical 62-test total and earlier screenshot/benchmark records are not evidence for the current merge. Keep the final merge revision, artifact hashes, R8 mapping, and executed device/Play results with each release candidate.
+
+Signing, Play ownership, tester enrollment, the two-version distribution setup, and store/device acceptance remain release-owner gates. A successful unsigned build or saved configuration does not establish a signed or published release.

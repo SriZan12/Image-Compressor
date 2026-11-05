@@ -1,151 +1,95 @@
 package com.example.imagecompressor.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.imagecompressor.data.model.ThemePreference
+import com.example.imagecompressor.R
 import com.example.imagecompressor.play.update.UpdateState
 import com.example.imagecompressor.play.update.UpdateStatus
-import com.example.imagecompressor.theme.FigmaUi
-import com.example.imagecompressor.ui.components.FigmaCard
-import com.example.imagecompressor.ui.components.FigmaChip
-import com.example.imagecompressor.ui.components.OutlinedPillButton
-import com.example.imagecompressor.ui.components.PrivacyBadge
+import com.example.imagecompressor.data.model.ThemePreference
+import com.example.imagecompressor.data.model.toReadableSize
+import com.example.imagecompressor.theme.Space
+import com.example.imagecompressor.ui.components.*
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 
 @Composable
-fun SettingsScreen(
-    state: ImageCompressorUiState,
-    modifier: Modifier = Modifier,
-    onSetTheme: (ThemePreference) -> Unit,
-    onClearHistory: () -> Unit,
-    updateState: UpdateState,
-    onCheckForUpdates: () -> Unit,
-    onRateApp: () -> Unit,
-) {
-  LazyColumn(
-    modifier = modifier.fillMaxSize().background(FigmaUi.Background),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
-  ) {
-    item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
-        Text(
-          "Appearance",
-          color = FigmaUi.Ink,
-          fontSize = 22.sp,
-          lineHeight = 28.sp,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          "Choose how the interface should look.",
-          color = FigmaUi.Body,
-          fontSize = 14.sp,
-          lineHeight = 20.sp
-        )
-        Row(
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          ThemePreference.entries.forEach { preference ->
-            FigmaChip(
-              preference.label,
-              selected = state.themePreference == preference,
-              onClick = { onSetTheme(preference) })
+fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSetTheme: (ThemePreference) -> Unit,
+  onSetDynamicColor: (Boolean) -> Unit, onClearHistory: () -> Unit,
+  updateState: UpdateState = UpdateState(), onCheckForUpdates: () -> Unit = {},
+  onRateApp: () -> Unit = {}, playActionsEnabled: Boolean = true) {
+  var clear by rememberSaveable { mutableStateOf(false) }
+  if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text(stringResource(R.string.clear_history_title)) },
+    text = { Text(stringResource(R.string.clear_history_body)) },
+    confirmButton = { TextButton({ onClearHistory(); clear = false }) { Text(stringResource(R.string.remove_all)) } },
+    dismissButton = { TextButton({ clear = false }) { Text(stringResource(R.string.cancel)) } })
+  ScreenColumn(modifier) {
+    SectionCard {
+      Text(stringResource(R.string.appearance), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+      Column(Modifier.selectableGroup()) {
+        ThemePreference.entries.forEach { theme ->
+          Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(state.themePreference == theme, role = Role.RadioButton,
+            onClick = { onSetTheme(theme) }).padding(vertical = Space.sm), horizontalArrangement = Arrangement.spacedBy(Space.md), verticalAlignment = Alignment.CenterVertically) {
+            AppIcon(when (theme) { ThemePreference.SYSTEM -> R.drawable.ic_contrast; ThemePreference.LIGHT -> R.drawable.ic_light_mode; ThemePreference.DARK -> R.drawable.ic_dark_mode }, size = 28.dp)
+            Text(stringResource(when (theme) { ThemePreference.SYSTEM -> R.string.theme_system; ThemePreference.LIGHT -> R.string.theme_light; ThemePreference.DARK -> R.string.theme_dark }), Modifier.weight(1f))
+            RadioButton(state.themePreference == theme, onClick = null)
           }
         }
       }
+      HorizontalDivider()
+      SettingSwitch(stringResource(R.string.device_colors), stringResource(R.string.device_colors_body), state.dynamicColor, onSetDynamicColor)
     }
-    item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
-        Text("App updates", color = FigmaUi.Ink, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
-        val updateMessage = when {
-          updateState.isChecking -> "Checking Google Play…"
-          updateState.isCompleting || updateState.status == UpdateStatus.INSTALLING -> "Finishing the update…"
-          updateState.status == UpdateStatus.UP_TO_DATE -> "You’re using the latest version available to you."
-          updateState.status == UpdateStatus.AVAILABLE -> "An update is available. Finish any current task to continue."
-          updateState.status == UpdateStatus.PENDING -> "Preparing your update. You can keep using the app."
-          updateState.status == UpdateStatus.DOWNLOADING -> "Downloading your update. You can keep using the app."
-          updateState.status == UpdateStatus.DOWNLOADED -> "Your update is ready. Use Restart to update when your work is finished."
-          updateState.status == UpdateStatus.CANCELED -> "Update canceled. You can check again whenever you’re ready."
-          updateState.status == UpdateStatus.FAILED -> "Updates are unavailable right now. Check your connection and try again through Google Play."
-          else -> "Get the latest version through Google Play. Your photos stay on your device."
-        }
-        Text(updateMessage, color = FigmaUi.Body, fontSize = 14.sp, lineHeight = 20.sp)
-        val canOpenPlay = !state.isCompressing && !state.isSaving && !state.isLoadingImages && !state.isExternalFlowActive
-        OutlinedPillButton(
-          text = if (updateState.isChecking) "Checking…" else "Check for updates",
-          leading = "↻",
-          onClick = onCheckForUpdates,
-          enabled = canOpenPlay && !updateState.isChecking && !updateState.isCompleting && updateState.activePrompt == null,
-          modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { role = Role.Button },
-        )
-        OutlinedPillButton(
-          text = "Rate this app",
-          leading = "★",
-          onClick = onRateApp,
-          enabled = canOpenPlay && !updateState.isCompleting,
-          modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics { role = Role.Button },
-        )
-        Text("Opens the app’s Google Play listing.", color = FigmaUi.Body, fontSize = 14.sp, lineHeight = 20.sp)
+    SectionCard {
+      Text(stringResource(R.string.play_updates_title), style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.semantics { heading() })
+      val message = when {
+        updateState.isChecking -> R.string.play_checking_detail
+        updateState.isCompleting || updateState.status == UpdateStatus.INSTALLING -> R.string.play_finishing_update
+        updateState.status == UpdateStatus.UP_TO_DATE -> R.string.play_up_to_date
+        updateState.status == UpdateStatus.AVAILABLE -> R.string.play_update_available
+        updateState.status == UpdateStatus.PENDING -> R.string.play_update_pending_detail
+        updateState.status == UpdateStatus.DOWNLOADING -> R.string.play_update_downloading_detail
+        updateState.status == UpdateStatus.DOWNLOADED -> R.string.play_update_ready_detail
+        updateState.status == UpdateStatus.CANCELED -> R.string.play_update_canceled
+        updateState.status == UpdateStatus.FAILED -> R.string.play_update_unavailable
+        else -> R.string.play_updates_description
       }
+      Text(stringResource(message), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      val canOpenPlay = playActionsEnabled && !state.isCompressing && !state.isSaving &&
+        !state.isLoadingImages && !state.isExternalFlowActive && !state.isPreparingShare &&
+        !state.isInitializing && !state.isCancelling && state.editorAction == null
+      ActionButton(stringResource(if (updateState.isChecking) R.string.play_checking else R.string.play_check_updates),
+        onCheckForUpdates, Modifier.fillMaxWidth(), R.drawable.ic_download, secondary = true,
+        enabled = canOpenPlay && !updateState.isChecking && !updateState.isCompleting && updateState.activePrompt == null)
+      ActionButton(stringResource(R.string.play_rate_app), onRateApp, Modifier.fillMaxWidth(), secondary = true,
+        enabled = canOpenPlay && !updateState.isCompleting && updateState.activePrompt == null)
+      Text(stringResource(R.string.play_rate_description), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
-        PrivacyBadge(text = "Privacy First", compact = true)
-        Text(
-          "Images are compressed locally on your device.",
-          color = FigmaUi.Ink,
-          fontSize = 18.sp,
-          lineHeight = 24.sp,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          "The app does not upload your photos to a server.",
-          color = FigmaUi.Body,
-          fontSize = 14.sp,
-          lineHeight = 20.sp
-        )
-      }
+    SectionCard {
+      Text(stringResource(R.string.storage), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+      val used = state.history.filter { it.localPath != null }.sumOf { it.compressedSizeBytes }
+      Text(stringResource(R.string.storage_usage, if (used == 0L) "0 MB" else used.toReadableSize()), style = MaterialTheme.typography.titleMedium)
+      LinearProgressIndicator(progress = { (used / (512f * 1024 * 1024)).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+      Text(stringResource(R.string.storage_help), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      ActionButton(stringResource(R.string.clear_history), { clear = true }, Modifier.fillMaxWidth(), R.drawable.ic_delete,
+        secondary = true, enabled = state.history.isNotEmpty() && !state.isCompressing && !state.isSaving)
     }
-    item {
-      FigmaCard(shape = RoundedCornerShape(28.dp), padding = 24.dp) {
-        Text(
-          "History",
-          color = FigmaUi.Ink,
-          fontSize = 22.sp,
-          lineHeight = 28.sp,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          "${state.history.size} compression record${if (state.history.size == 1) "" else "s"}",
-          color = FigmaUi.Body,
-          fontSize = 14.sp,
-          lineHeight = 20.sp
-        )
-        OutlinedPillButton(
-          text = "Clear History",
-          leading = "×",
-          onClick = onClearHistory,
-          modifier = Modifier.fillMaxWidth().height(52.dp)
-        )
-      }
+    SectionCard {
+      AppIcon(R.drawable.ic_lock)
+      Text(stringResource(R.string.privacy), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+      Text(stringResource(R.string.privacy_detail), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+    Text(stringResource(R.string.preferences_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
   }
 }

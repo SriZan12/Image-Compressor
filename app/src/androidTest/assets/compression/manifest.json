@@ -1,0 +1,42 @@
+[
+  {
+    "file": "alpha.png",
+    "bytes": 59226,
+    "sha256": "e6974ee19de9ffba68992ed2197a7a289798c248a6e1351c74246a574b334996"
+  },
+  {
+    "file": "astronaut.png",
+    "bytes": 791555,
+    "sha256": "88431cd9653ccd539741b555fb0a46b61558b301d4110412b5bc28b5e3ea6cb5"
+  },
+  {
+    "file": "chart.png",
+    "bytes": 1289,
+    "sha256": "86db9ee2a85830ea1f099f413b8fc544a2386fed6ff66591fd1345d25a5ec86d"
+  },
+  {
+    "file": "corrupt.png",
+    "bytes": 13,
+    "sha256": "c04bee9d659201c6647cbc29f7c2e1556b8370c54f4a50a32d84ceab2fddf6cd"
+  },
+  {
+    "file": "large-12mp.png",
+    "bytes": 751056,
+    "sha256": "674b42d3687374e7d92c2b604bbcebd6940e9a6f4b721dfba42e35a91946e242"
+  },
+  {
+    "file": "large-48mp.png",
+    "bytes": 2136036,
+    "sha256": "a33ebce06321a3a68eb097d34f552211ffd3b9fef5443a12076979f3bc5a3689"
+  },
+  {
+    "file": "noise.png",
+    "bytes": 264075,
+    "sha256": "c86815fe6b6e0869a4ae02b192846f79762d9b3c5081c8b4e5b8506500575494"
+  },
+  {
+    "file": "truncated.png",
+    "bytes": 32,
+    "sha256": "d6bb2446b4127d5e19f23830c882ef636dde82d00f2f4660a7bddfb3e75ebc72"
+  }
+]

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="play_updates_title">App updates</string>
+    <string name="play_check_updates">Check for updates</string>
+    <string name="play_checking">Checking…</string>
+    <string name="play_checking_detail">Checking Google Play…</string>
+    <string name="play_finishing_update">Finishing the update…</string>
+    <string name="play_up_to_date">You’re using the latest version available to you.</string>
+    <string name="play_update_available">An update is available. Finish any current task to continue.</string>
+    <string name="play_update_pending_detail">Preparing your update. You can keep using the app.</string>
+    <string name="play_update_downloading_detail">Downloading your update. You can keep using the app.</string>
+    <string name="play_update_ready_detail">Your update is ready. Use Restart to update when your work is finished.</string>
+    <string name="play_update_canceled">Update canceled. You can check again whenever you’re ready.</string>
+    <string name="play_update_unavailable">Updates are unavailable right now. Check your connection and try again through Google Play.</string>
+    <string name="play_updates_description">Get the latest version through Google Play. Your photos stay on your device.</string>
+    <string name="play_rate_app">Rate this app</string>
+    <string name="play_rate_description">Opens the app’s Google Play listing.</string>
+    <string name="play_listing_unavailable">The Play Store listing could not be opened. Please try again later.</string>
+    <string name="play_restart_title">Restarting to update</string>
+    <string name="play_restart_wait">Please wait while Google Play finishes the update.</string>
+    <string name="play_update_ready">Update ready</string>
+    <string name="play_downloading">Downloading update</string>
+    <string name="play_downloading_percent">Downloading update · %1$d%%</string>
+    <string name="play_pending">Preparing update</string>
+    <string name="play_restart_when_ready">Restart when you’re ready to use the new version.</string>
+    <string name="play_finish_work">Finish saving or sharing your photos, then return to Home or Settings before restarting.</string>
+    <string name="play_restart_action">Restart to update</string>
+    <string name="play_continue_work">You can keep using the app.</string>
+    <string name="play_download_progress">%1$d%% downloaded</string>
+    <string name="play_picker_unavailable">No photo picker is available on this device.</string>
+    <string name="play_picker_error">Unable to open the photo picker. Please try again.</string>
+    <string name="play_share_title">Share compressed images</string>
+    <string name="play_share_ready_retry">Your photo is ready. Tap Share again from the current screen.</string>
+    <string name="play_share_no_target">No app is available to share images. Save them to your gallery instead.</string>
+    <string name="play_share_error">This image can no longer be shared. Reopen the result or select the original again.</string>
+</resources>

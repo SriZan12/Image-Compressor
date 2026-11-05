@@ -1,85 +1,121 @@
 package com.example.imagecompressor.util
 
-import android.Manifest
 import android.content.ContentValues
 import android.content.Context
-import android.content.pm.PackageManager
-import android.media.MediaScannerConnection
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.core.content.ContextCompat
 import com.example.imagecompressor.data.model.CompressedImage
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import kotlin.coroutines.resume
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
-class GallerySaver(private val context: Context) {
-  suspend fun save(image: CompressedImage): Uri =
-    withContext(Dispatchers.IO) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        saveWithMediaStore(image)
-      } else {
-        saveLegacy(image)
-      }
-    }
+interface GalleryExporter {
+  fun isReadable(uri: Uri): Boolean
+  /** Keep a published export; remove an owned incomplete export. Never deletes published photos. */
+  fun recover(uri: Uri): Uri?
+  suspend fun save(image: CompressedImage, pendingUri: Uri?,
+    onReserved: suspend (Uri?) -> Unit, onPublished: suspend (Uri) -> Unit): Uri
+}
 
-  private fun saveWithMediaStore(image: CompressedImage): Uri {
-    val resolver = context.contentResolver
-    val values =
-      ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, File(image.outputFilePath).name)
-        put(MediaStore.Images.Media.MIME_TYPE, image.format.mimeType)
-        put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Image Compressor")
-        put(MediaStore.Images.Media.IS_PENDING, 1)
+class GallerySaver(private val context: Context) : GalleryExporter {
+  private val resolver = context.contentResolver
+  private val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+  private val relativePath = "${Environment.DIRECTORY_PICTURES}/Image Compressor/"
+
+  override fun isReadable(uri: Uri): Boolean = try {
+    resolver.openAssetFileDescriptor(uri, "r")?.use { it.length != 0L } ?: false
+  } catch (_: Exception) { false }
+
+  /** A journal entry is only reusable/deletable while it still names our own MediaStore row. */
+  private fun pending(uri: Uri): Boolean? {
+    val path = uri.pathSegments
+    if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY || path.size != 4 ||
+      path[1] != "images" || path[2] != "media" || path.last().toLongOrNull() == null) return null
+    return try {
+      resolver.query(uri, arrayOf(MediaStore.Images.Media.IS_PENDING, MediaStore.Images.Media.OWNER_PACKAGE_NAME),
+        null, null, null)?.use {
+        if (it.moveToFirst() && it.getString(1) == context.packageName) it.getInt(0) != 0 else null
       }
-    val uri =
-      resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        ?: error("Unable to create a gallery entry.")
-    try {
-      resolver.openOutputStream(uri)?.use { output ->
-        FileInputStream(image.outputFilePath).use { input -> input.copyTo(output) }
-      } ?: error("Unable to open the gallery destination.")
-      values.clear()
-      values.put(MediaStore.Images.Media.IS_PENDING, 0)
-      resolver.update(uri, values, null, null)
-      return uri
-    } catch (throwable: Throwable) {
-      resolver.delete(uri, null, null)
-      throw throwable
+    } catch (_: SecurityException) {
+      // A revoked/deleted destination must not prevent restoring all other retained photos.
+      null
     }
   }
 
-  private suspend fun saveLegacy(image: CompressedImage): Uri {
-    if (
-      ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-        PackageManager.PERMISSION_GRANTED
-    ) {
-      error("Storage permission is needed to save images on Android 8 and 9.")
+  override fun recover(uri: Uri): Uri? = try {
+    when (pending(uri)) {
+      false -> uri.takeIf(::isReadable)
+      true -> { resolver.delete(uri, null, null); null }
+      null -> null
     }
-    val picturesDirectory =
-      File(
-          Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-          "Image Compressor",
-        )
-        .apply { mkdirs() }
-    val outputFile = File(picturesDirectory, File(image.outputFilePath).name)
-    withContext(Dispatchers.IO) {
-      FileInputStream(image.outputFilePath).use { input ->
-        FileOutputStream(outputFile).use { output -> input.copyTo(output) }
+  } catch (_: SecurityException) {
+    // Access can change after the ownership query. Keep the retained original result usable.
+    null
+  }
+
+  override suspend fun save(image: CompressedImage, pendingUri: Uri?,
+    onReserved: suspend (Uri?) -> Unit, onPublished: suspend (Uri) -> Unit): Uri = withContext(Dispatchers.IO) {
+    val source = File(image.outputFilePath)
+    if (!source.isFile || source.length() == 0L) throw IOException("This result is unavailable. Compress the original again.")
+    val name = "ImageCompressor_${image.historyId}_${source.name}"
+    // Stable, app-owned name closes the insert/journal process-death window without creating duplicates.
+    val existing = pendingUri ?: resolver.query(collection, arrayOf(MediaStore.Images.Media._ID),
+      "${MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ?",
+      arrayOf(name, relativePath, context.packageName), null)?.use {
+      if (it.moveToFirst()) Uri.withAppendedPath(collection, it.getLong(0).toString()) else null
+    }
+    if (existing != null && pending(existing) == false && isReadable(existing)) {
+      withContext(NonCancellable) { onPublished(existing) }
+      return@withContext existing
+    }
+    var published = false
+    val uri = withContext(NonCancellable) {
+      val reserved = existing?.takeIf { pending(it) == true } ?: resolver.insert(collection, ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, name)
+        put(MediaStore.Images.Media.MIME_TYPE, image.format.mimeType)
+        put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+      }) ?: throw IOException("Unable to create a gallery entry. Check available storage.")
+      try { onReserved(reserved) } catch (failure: Throwable) {
+        try { resolver.delete(reserved, null, null) } catch (cleanup: Exception) { failure.addSuppressed(cleanup) }
+        throw failure
       }
+      reserved
     }
-    return suspendCancellableCoroutine { continuation ->
-      MediaScannerConnection.scanFile(
-        context,
-        arrayOf(outputFile.absolutePath),
-        arrayOf(image.format.mimeType),
-      ) { _, uri -> continuation.resume(uri ?: Uri.fromFile(outputFile)) }
+    try {
+      val coroutine = currentCoroutineContext()
+      resolver.openOutputStream(uri, "w")?.use { output ->
+        source.inputStream().use { input ->
+          val buffer = ByteArray(65536)
+          while (true) {
+            coroutine.ensureActive()
+            val count = input.read(buffer)
+            if (count < 0) break
+            output.write(buffer, 0, count)
+          }
+          output.flush()
+        }
+      } ?: throw IOException("Unable to open the gallery destination.")
+      coroutine.ensureActive()
+      // Publication and its journal update must finish together even if the caller is cancelled.
+      withContext(NonCancellable) {
+        if (resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null) != 1)
+          throw IOException("The gallery could not finish saving this image.")
+        published = true
+        onPublished(uri)
+      }
+      uri
+    } catch (failure: Throwable) {
+      if (!published) withContext(NonCancellable) {
+        try { resolver.delete(uri, null, null); onReserved(null) }
+        catch (cleanup: Exception) { failure.addSuppressed(cleanup) }
+      }
+      throw failure
     }
   }
 }

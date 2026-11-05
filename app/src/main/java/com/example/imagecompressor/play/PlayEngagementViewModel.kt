@@ -200,7 +200,7 @@ class PlayEngagementViewModel(application: Application) : AndroidViewModel(appli
   fun restartUpdate() {
     if (!canShowPlayUi() || feedback.value.reviewBusy) return
     val token = coordinator.beginRestart(workSafety()) ?: run {
-      message("Finish saving or sharing, then clear your selection before restarting.")
+      message("Finish saving or sharing your photos, then return to Home or Settings before restarting.")
       return
     }
     // completeUpdate is not cancelable by a coroutine timeout. Never unlock photo commands on a
@@ -292,17 +292,10 @@ class PlayEngagementViewModel(application: Application) : AndroidViewModel(appli
     appState?.value?.screen != null && appState?.value?.screen != AppScreen.ONBOARDING &&
     !workSafety().isBusy
 
-  private fun naturalPause(): Boolean = appState?.value?.let { state ->
-    state.screen == AppScreen.HOME && !workSafety().isBusy &&
-      state.selectedImages.isEmpty() && state.compressedImages.isEmpty() && state.message == null
-  } ?: false
+  private fun naturalPause(): Boolean = appState?.value?.isNaturalPlayPause() ?: false
 
-  private fun workSafety(): WorkSafety = appState?.value?.let { state ->
-    WorkSafety(
-      isBusy = state.isCompressing || state.isSaving || state.isLoadingImages || state.isExternalFlowActive,
-      hasPendingWork = state.selectedImages.isNotEmpty() || state.compressedImages.any { it.savedUri == null },
-    )
-  } ?: WorkSafety(isBusy = true, hasPendingWork = true)
+  private fun workSafety(): WorkSafety = appState?.value?.toPlayWorkSafety()
+    ?: WorkSafety(isBusy = true, hasPendingWork = true)
 
   private fun message(text: String) { feedback.update { it.copy(message = text) } }
   fun consumeMessage() { feedback.update { it.copy(message = null) } }

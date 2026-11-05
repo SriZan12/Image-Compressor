@@ -1,458 +1,290 @@
 package com.example.imagecompressor.ui
 
-import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
+import android.content.Context
+import android.content.ContextWrapper
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.imagecompressor.R
 import com.example.imagecompressor.play.PlayEngagementViewModel
 import com.example.imagecompressor.play.PlayStoreListing
+import com.example.imagecompressor.play.toPlayWorkSafety
 import com.example.imagecompressor.play.update.UpdateStatus
 import com.example.imagecompressor.data.model.ThemePreference
-import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
-import com.example.imagecompressor.ui.components.toMimeType
-import com.example.imagecompressor.ui.components.UpdateBanner
+import com.example.imagecompressor.theme.Space
+import com.example.imagecompressor.ui.components.*
 import com.example.imagecompressor.ui.state.AppScreen
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 import com.example.imagecompressor.util.ShareUtils
-import kotlinx.coroutines.delay
-
-
 
 @Composable
-fun ImageCompressorRoot(
-  viewModel: ImageCompressorViewModel = viewModel(),
-  playViewModel: PlayEngagementViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
-) {
+fun ImageCompressorRoot(viewModel: ImageCompressorViewModel = viewModel(),
+  playViewModel: PlayEngagementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
-  var showSplash by rememberSaveable { mutableStateOf(true) }
-  val systemDarkTheme = isSystemInDarkTheme()
-  val darkTheme =
-    when (state.themePreference) {
-      ThemePreference.SYSTEM -> systemDarkTheme
-      ThemePreference.LIGHT -> false
-      ThemePreference.DARK -> true
-    }
-
-  LaunchedEffect(Unit) {
-    delay(1_400)
-    showSplash = false
+  val dark = when (state.themePreference) {
+    ThemePreference.SYSTEM -> isSystemInDarkTheme(); ThemePreference.LIGHT -> false; ThemePreference.DARK -> true
   }
-
-  PlayEngagementHost(appViewModel = viewModel, playViewModel = playViewModel, uiReady = !showSplash)
-
-  ImageCompressorTheme(darkTheme = darkTheme) {
-    if (showSplash) {
-      SplashScreen()
-    } else {
-      Surface(modifier = Modifier.fillMaxSize(), color = FigmaUi.Background) {
-        ImageCompressorApp(state = state, viewModel = viewModel, playViewModel = playViewModel)
+  val view = LocalView.current
+  val context = LocalContext.current
+  SideEffect {
+    context.activity()?.let { activity ->
+      WindowCompat.getInsetsController(activity.window, view).apply {
+        isAppearanceLightStatusBars = !dark
+        isAppearanceLightNavigationBars = !dark
+      }
+    }
+  }
+  PlayEngagementHost(viewModel, playViewModel,
+    uiReady = !state.isInitializing && state.initializationError == null)
+  ImageCompressorTheme(darkTheme = dark, dynamicColor = state.dynamicColor) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+      when {
+        state.isInitializing -> SplashScreen()
+        state.initializationError != null -> ScreenColumn(Modifier.safeDrawingPadding()) {
+          EmptyState(stringResource(R.string.startup_error), checkNotNull(state.initializationError), icon = R.drawable.ic_error)
+          ActionButton(stringResource(R.string.retry), viewModel::refreshAvailability, Modifier.fillMaxWidth(), R.drawable.ic_restart_alt)
+        }
+        else -> ImageCompressorApp(state, viewModel, playViewModel)
       }
     }
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private tailrec fun Context.activity(): Activity? = when (this) {
+  is Activity -> this; is ContextWrapper -> baseContext.activity(); else -> null
+}
+
 @Composable
-private fun ImageCompressorApp(
-  state: ImageCompressorUiState,
-  viewModel: ImageCompressorViewModel,
-  playViewModel: PlayEngagementViewModel,
-) {
+private fun ImageCompressorApp(state: ImageCompressorUiState, viewModel: ImageCompressorViewModel,
+  playViewModel: PlayEngagementViewModel) {
   val context = LocalContext.current
-  val snackbarHostState = remember { SnackbarHostState() }
+  val snackbar = remember { SnackbarHostState() }
+  val lifecycleOwner = LocalLifecycleOwner.current
+  val pickerUnavailableMessage = stringResource(R.string.play_picker_unavailable)
+  val pickerErrorMessage = stringResource(R.string.play_picker_error)
+  val shareRetryMessage = stringResource(R.string.play_share_ready_retry)
+  val shareNoTargetMessage = stringResource(R.string.play_share_no_target)
+  val shareErrorMessage = stringResource(R.string.play_share_error)
+  val listingUnavailableMessage = stringResource(R.string.play_listing_unavailable)
   val updates by playViewModel.updates.collectAsStateWithLifecycle()
   val feedback by playViewModel.uiState.collectAsStateWithLifecycle()
-  val multiPicker =
-    rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
-      viewModel.endExternalFlow()
-      viewModel.addSelectedImages(uris)
-    }
-  val singlePicker =
-    rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-      viewModel.endExternalFlow()
-      uri?.let { viewModel.addSelectedImages(listOf(it)) }
-    }
+  val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) {
+    viewModel.endExternalFlow()
+    viewModel.addSelectedImages(it)
+  }
+  val replacementPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) {
+    viewModel.endExternalFlow()
+    viewModel.replaceSelectedImages(it)
+  }
   val shareLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
     viewModel.endExternalFlow()
   }
-  val launchShare: (() -> Intent?) -> Unit = { createIntent ->
+  val selectMany: () -> Unit = {
     if (viewModel.beginExternalFlow()) {
+      try { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+      catch (_: ActivityNotFoundException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage(pickerUnavailableMessage)
+      }
+      catch (_: SecurityException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage(pickerErrorMessage)
+      }
+    }
+  }
+  val newPhotos: () -> Unit = {
+    if (viewModel.beginExternalFlow()) {
+      try { replacementPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+      catch (_: ActivityNotFoundException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage(pickerUnavailableMessage)
+      }
+      catch (_: SecurityException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage(pickerErrorMessage)
+      }
+    }
+  }
+  // Both callbacks below receive only repository-verified durable URIs. The prepared-share gate
+  // transfers protection from export/preparation into the external chooser without a restart gap.
+  val launchPreparedShare: (List<Uri>) -> Unit = { uris ->
+    if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+      viewModel.showMessage(shareRetryMessage)
+    } else if (viewModel.beginPreparedShare()) {
       try {
-        val intent = createIntent()
+        val intent = ShareUtils.createShareUrisIntent(context, uris, viewModel::showMessage)
         if (intent == null) viewModel.endExternalFlow() else shareLauncher.launch(intent)
       } catch (_: ActivityNotFoundException) {
         viewModel.endExternalFlow()
-        viewModel.showMessage("No app is available to share these photos.")
+        viewModel.showMessage(shareNoTargetMessage)
       } catch (_: SecurityException) {
         viewModel.endExternalFlow()
-        viewModel.showMessage("These photos could not be shared. Try saving them first.")
-      }
-    }
-  }
-  var pendingSavePath by rememberSaveable { mutableStateOf<String?>(null) }
-  var pendingSaveAll by rememberSaveable { mutableStateOf(false) }
-  val permissionLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-      viewModel.endExternalFlow()
-      if (granted) {
-        if (pendingSaveAll) viewModel.saveAllToGallery()
-        else pendingSavePath?.let { path ->
-          val current = viewModel.uiState.value
-          val image = current.compressedImages.find { it.outputFilePath == path }
-            ?: current.compareImage?.takeIf { it.outputFilePath == path }
-          image?.let(viewModel::saveToGallery)
-        }
-      } else viewModel.showMessage("Storage permission was not granted. The image was not saved.")
-      pendingSavePath = null
-      pendingSaveAll = false
-    }
-  val saveWithPermission: (String?) -> Unit = { path ->
-    val needsLegacyPermission =
-      Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
-        ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-          PackageManager.PERMISSION_GRANTED
-    if (needsLegacyPermission) {
-      if (viewModel.beginExternalFlow()) {
-        pendingSavePath = path
-        pendingSaveAll = path == null
-        try {
-          permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        } catch (_: RuntimeException) {
-          pendingSavePath = null
-          pendingSaveAll = false
-          viewModel.endExternalFlow()
-          viewModel.showMessage("Storage permission could not be requested. Please try again.")
-        }
-      }
-    } else if (path == null) {
-      viewModel.saveAllToGallery()
-    } else {
-      val current = viewModel.uiState.value
-      val image = current.compressedImages.find { it.outputFilePath == path }
-        ?: current.compareImage?.takeIf { it.outputFilePath == path }
-      image?.let(viewModel::saveToGallery)
-    }
-  }
-  val selectOne = {
-    if (viewModel.beginExternalFlow()) {
-      try {
-        singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-      } catch (_: RuntimeException) {
+        viewModel.showMessage(shareErrorMessage)
+      } catch (_: IllegalStateException) {
         viewModel.endExternalFlow()
-        viewModel.showMessage("The photo picker is unavailable. Please try again.")
+        viewModel.showMessage(shareRetryMessage)
       }
     }
   }
-  val selectMany = {
-    if (viewModel.beginExternalFlow()) {
-      try {
-        multiPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-      } catch (_: RuntimeException) {
-        viewModel.endExternalFlow()
-        viewModel.showMessage("The photo picker is unavailable. Please try again.")
-      }
-    }
+  val share: (List<Long>) -> Unit = { ids -> viewModel.shareResults(ids, launchPreparedShare) }
+  LifecycleResumeEffect(Unit) {
+    viewModel.setEditorResumed(true)
+    viewModel.refreshAvailability()
+    onPauseOrDispose { viewModel.setEditorResumed(false) }
   }
-
-  LaunchedEffect(state.message) {
-    state.message?.let {
-      snackbarHostState.showSnackbar(it)
-      viewModel.consumeMessage()
-    }
-  }
-
+  LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); viewModel.consumeMessage() } }
   LaunchedEffect(feedback.message) {
-    feedback.message?.let {
-      snackbarHostState.showSnackbar(it)
-      playViewModel.consumeMessage()
-    }
+    feedback.message?.let { snackbar.showSnackbar(it); playViewModel.consumeMessage() }
   }
-
-  if (updates.isCompleting || updates.status == UpdateStatus.INSTALLING) {
-    AlertDialog(
-      onDismissRequest = {},
-      confirmButton = {},
-      title = { Text("Restarting to update", color = FigmaUi.Ink) },
-      text = { Text("Please wait while Google Play finishes the update.", color = FigmaUi.Body) },
-      containerColor = FigmaUi.Surface,
-      properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-    )
-  }
-
-  BackHandler(enabled = state.screen !in listOf(AppScreen.ONBOARDING, AppScreen.HOME)) {
-    viewModel.goBack()
-  }
-
-  Scaffold(
-    containerColor = FigmaUi.Background,
-    topBar = {
-      if (state.screen != AppScreen.ONBOARDING) {
-        AppTopBar(
-          screen = state.screen,
-          onBack = viewModel::goBack,
-          onClearSelection = viewModel::clearSelectedImages,
-          hasSelection = state.selectedImages.isNotEmpty(),
-        )
-      }
-    },
-    bottomBar = {
-      if (state.screen in listOf(AppScreen.HOME, AppScreen.HISTORY, AppScreen.SETTINGS)) {
-        AppBottomBar(screen = state.screen, onNavigate = viewModel::navigateTo)
-      }
-    },
-    snackbarHost = { SnackbarHost(snackbarHostState) },
-  ) { padding ->
-    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-      val canRestart = !state.isCompressing && !state.isSaving && !state.isLoadingImages &&
-        !state.isExternalFlowActive && !feedback.reviewBusy && state.selectedImages.isEmpty() &&
-        state.compressedImages.none { it.savedUri == null }
-      UpdateBanner(update = updates, canRestart = canRestart, onRestart = playViewModel::restartUpdate)
-      Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+  val installing = updates.isCompleting || updates.status == UpdateStatus.INSTALLING
+  if (installing) AlertDialog(onDismissRequest = {}, confirmButton = {},
+    title = { Text(stringResource(R.string.play_restart_title)) },
+    text = { Text(stringResource(R.string.play_restart_wait)) },
+    properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false))
+  BackHandler(state.screen !in listOf(AppScreen.ONBOARDING, AppScreen.HOME) && !installing) { viewModel.goBack() }
+  AppChrome(state.screen, snackbar, viewModel::goBack, viewModel::navigateTo,
+    navigationEnabled = !state.isLoadingImages && !state.isSaving && !state.isCompressing &&
+      !state.isPreparingShare && !state.isExternalFlowActive && !installing) { modifier ->
+    Column(modifier.fillMaxSize()) {
+      val canRestart = state.toPlayWorkSafety().canRestart && !feedback.reviewBusy
+      UpdateBanner(updates, canRestart, playViewModel::restartUpdate)
+      Box(Modifier.weight(1f).fillMaxWidth()) {
+        val screenModifier = Modifier.fillMaxSize()
         when (state.screen) {
-          AppScreen.ONBOARDING ->
-            OnboardingScreen(modifier = Modifier.fillMaxSize(), onContinue = viewModel::completeOnboarding)
-          AppScreen.HOME ->
-            HomeScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onSelectImages = selectMany,
-              onReviewSelection = { viewModel.navigateTo(AppScreen.PREVIEW) },
-              onOpenHistory = { viewModel.navigateTo(AppScreen.HISTORY) },
-            )
-          AppScreen.PREVIEW ->
-            PreviewScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onSelectOne = selectOne,
-              onSelectMany = selectMany,
-              onRemove = viewModel::removeSelectedImage,
-              onContinue = { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) },
-            )
-          AppScreen.COMPRESSION_SETTINGS ->
-            CompressionSettingsScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              viewModel = viewModel,
-            )
-          AppScreen.RESULTS ->
-            ResultsScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onSave = { image -> saveWithPermission(image.outputFilePath) },
-              onSaveAll = { saveWithPermission(null) },
-              onShare = { image -> launchShare { ShareUtils.createShareIntent(context, listOf(image)) } },
-              onShareAll = { launchShare { ShareUtils.createShareIntent(context, state.compressedImages) } },
-              onCompare = viewModel::openImageCompare,
-              onStartOver = viewModel::startOver,
-            )
-          AppScreen.IMAGE_COMPARE ->
-            ImageCompareScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onSave = { image -> saveWithPermission(image.outputFilePath) },
-              onShare = { image -> launchShare { ShareUtils.createShareIntent(context, listOf(image)) } },
-            )
-          AppScreen.HISTORY ->
-            HistoryScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onDelete = viewModel::deleteHistory,
-              onShare = { item ->
-                launchShare {
-                  ShareUtils.createShareUriIntent(
-                    context,
-                    (item.savedPath ?: item.compressedUri).toUri(),
-                    item.outputFormat.toMimeType(),
-                  )
-                }
-              },
-            )
-          AppScreen.SETTINGS ->
-            SettingsScreen(
-              state = state,
-              modifier = Modifier.fillMaxSize(),
-              onSetTheme = viewModel::setThemePreference,
-              onClearHistory = viewModel::clearHistory,
-              updateState = updates,
-              onCheckForUpdates = playViewModel::checkForUpdates,
-              onRateApp = {
-                if (!PlayStoreListing.open(context)) {
-                  viewModel.showMessage("The Play Store listing could not be opened. Please try again later.")
-                }
-              },
-            )
+          AppScreen.ONBOARDING -> OnboardingScreen(screenModifier, { viewModel.completeOnboarding(); selectMany() }, viewModel::completeOnboarding)
+          AppScreen.HOME -> HomeScreen(state, screenModifier, newPhotos,
+            { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) }, { viewModel.navigateTo(AppScreen.HISTORY) },
+            { viewModel.navigateTo(AppScreen.RESULTS) })
+          AppScreen.PREVIEW -> PreviewScreen(state, screenModifier, selectMany, viewModel::removeSelectedImage,
+            { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) })
+          AppScreen.COMPRESSION_SETTINGS -> CompressionSettingsScreen(state, screenModifier, viewModel::updateCompressionSettings,
+            viewModel::compressSelectedImages, { viewModel.navigateTo(AppScreen.PREVIEW) },
+            onRetryPreview = viewModel::retryEditorPreview,
+            onTargetDraftValidityChange = viewModel::setEditorTargetDraftValid,
+            onPreviewPhoto = viewModel::previewSelectedImage,
+            onSave = viewModel::saveEditorPhoto,
+            onShare = { viewModel.shareEditorPhoto { launchPreparedShare(listOf(it)) } })
+          AppScreen.RESULTS -> ResultsScreen(state, screenModifier, viewModel::saveAllToGallery,
+            { share(state.compressedImages.map { it.historyId }) }, viewModel::openImageCompare, newPhotos,
+            viewModel::cancelCompression, viewModel::retryRemaining,
+            onAdjustSize = { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) })
+          AppScreen.IMAGE_COMPARE -> ImageCompareScreen(state, screenModifier, viewModel::saveToGallery, { share(listOf(it.historyId)) })
+          AppScreen.HISTORY -> HistoryScreen(state, screenModifier, viewModel::deleteHistory, { share(listOf(it.id)) }, viewModel::openHistory, newPhotos)
+          AppScreen.SETTINGS -> SettingsScreen(state, screenModifier, viewModel::setThemePreference,
+            viewModel::setDynamicColor, viewModel::clearHistory, updateState = updates,
+            onCheckForUpdates = playViewModel::checkForUpdates, playActionsEnabled = !feedback.reviewBusy,
+            onRateApp = {
+              if (!PlayStoreListing.open(context)) viewModel.showMessage(listingUnavailableMessage)
+            })
         }
       }
     }
   }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Shared shell also used by native rendering tests, so tests include insets and navigation. */
 @Composable
-private fun AppTopBar(
-  screen: AppScreen,
-  onBack: () -> Unit,
-  onClearSelection: () -> Unit,
-  hasSelection: Boolean,
-) {
-  val isRoot = screen in listOf(AppScreen.HOME, AppScreen.HISTORY, AppScreen.SETTINGS)
-  Row(
-    modifier = Modifier.fillMaxWidth().height(64.dp).background(FigmaUi.Background).padding(horizontal = 16.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(
-        modifier =
-          Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(enabled = !isRoot) { onBack() },
-        contentAlignment = Alignment.Center,
-      ) {
-        Text(
-          text = if (isRoot) "≡" else "←",
-          color = FigmaUi.Primary,
-          fontSize = 22.sp,
-          lineHeight = 24.sp,
-          fontWeight = FontWeight.Medium,
-        )
+internal fun AppChrome(screen: AppScreen, snackbar: SnackbarHostState = remember { SnackbarHostState() },
+  onBack: () -> Unit = {}, onNavigate: (AppScreen) -> Unit = {}, navigationEnabled: Boolean = true,
+  content: @Composable (Modifier) -> Unit) {
+  BoxWithConstraints(Modifier.fillMaxSize()) {
+    val root = screen in listOf(AppScreen.HOME, AppScreen.HISTORY, AppScreen.SETTINGS)
+    val rail = root && maxWidth >= 840.dp && LocalDensity.current.fontScale <= 1.5f
+    Row(Modifier.fillMaxSize()) {
+      if (rail) NavigationRail(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Spacer(Modifier.height(20.dp))
+        destinations.forEach { (destination, icon, label) ->
+          NavigationRailItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon, size = 36.dp) },
+            label = { Text(stringResource(label)) }, enabled = navigationEnabled)
+          Spacer(Modifier.height(Space.lg))
+        }
       }
-      Text(
-        text = screen.title(),
-        color = FigmaUi.Ink,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        fontWeight = FontWeight.Bold,
-      )
-    }
-    when {
-      screen == AppScreen.PREVIEW && hasSelection ->
-        TextButton(onClick = onClearSelection) {
-          Text("Clear", color = FigmaUi.Body, fontWeight = FontWeight.Medium)
-        }
-      else ->
-        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-          Image(
-            painter = painterResource(R.drawable.splash_privacy_icon),
-            contentDescription = "Privacy",
-            modifier = Modifier.width(16.dp).height(20.dp),
-          )
-        }
+      Scaffold(Modifier.weight(1f).imePadding(), containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+          if (screen != AppScreen.ONBOARDING) Row(Modifier.fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .heightIn(min = 64.dp).padding(horizontal = Space.md, vertical = Space.xs),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.sm)) {
+            if (root) AppIcon(R.drawable.ic_shrink, modifier = Modifier.padding(Space.sm), size = 40.dp)
+            else IconButton(onBack, enabled = navigationEnabled) { AppIcon(R.drawable.ic_arrow_back, description = stringResource(R.string.back)) }
+            Text(stringResource(screen.titleResource()), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).semantics { heading() })
+          }
+        }, bottomBar = {
+          if (root && !rail && LocalDensity.current.fontScale > 1.3f) LargeTextNavigation(screen, onNavigate, navigationEnabled)
+          else if (root && !rail) NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+            destinations.forEach { (destination, icon, label) ->
+              NavigationBarItem(screen == destination, { onNavigate(destination) }, { AppIcon(icon, size = 36.dp) },
+                label = { Text(stringResource(label)) }, enabled = navigationEnabled)
+            }
+          }
+        }, snackbarHost = { SnackbarHost(snackbar) }) { padding -> content(Modifier.padding(padding)) }
     }
   }
 }
 
+/** Give large labels room to keep words intact instead of using fixed icon columns. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AppBottomBar(screen: AppScreen, onNavigate: (AppScreen) -> Unit) {
-  Row(
-    modifier =
-      Modifier
-        .fillMaxWidth()
-        .height(72.dp)
-        .background(FigmaUi.Surface)
-        .border(BorderStroke(1.dp, FigmaUi.Border.copy(alpha = 0.8f)))
-        .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 8.dp),
-    horizontalArrangement = Arrangement.SpaceBetween,
-    verticalAlignment = Alignment.CenterVertically,
-  ) {
-    listOf(
-        AppScreen.HOME to ("▣" to "Gallery"),
-        AppScreen.HISTORY to ("↺" to "History"),
-        AppScreen.SETTINGS to ("⚙" to "Settings"),
-      )
-      .forEach { (destination, pair) ->
+private fun LargeTextNavigation(screen: AppScreen, onNavigate: (AppScreen) -> Unit, enabled: Boolean) {
+  Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    // Labels wrap as complete controls instead of splitting words into narrow icon columns.
+    FlowRow(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(
+      WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)).padding(Space.sm).selectableGroup(),
+      horizontalArrangement = Arrangement.SpaceEvenly, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+      destinations.forEach { (destination, _, label) ->
         val selected = screen == destination
-        Column(
-          modifier =
-            Modifier
-              .clip(RoundedCornerShape(9999.dp))
-              .background(if (selected) FigmaUi.Green else Color.Transparent)
-              .clickable { onNavigate(destination) }
-              .padding(horizontal = 18.dp, vertical = 4.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-          Text(
-            text = pair.first,
-            color = if (selected) FigmaUi.GreenText else FigmaUi.Body,
-            fontSize = 18.sp,
-            lineHeight = 20.sp,
-          )
-          Text(
-            text = pair.second,
-            color = if (selected) FigmaUi.GreenText else FigmaUi.Body,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.5.sp,
-          )
+        Surface(Modifier.heightIn(min = 48.dp)
+          .selectable(selected, enabled = enabled, role = Role.Tab, onClick = { onNavigate(destination) }),
+          shape = MaterialTheme.shapes.medium,
+          color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+          contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant) {
+          Text(stringResource(label), Modifier.padding(horizontal = Space.md, vertical = Space.sm),
+            style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
         }
       }
+    }
   }
 }
 
-private fun AppScreen.title(): String =
-  when (this) {
-    AppScreen.ONBOARDING -> "Image Compressor"
-    AppScreen.HOME -> "Image Compressor"
-    AppScreen.PREVIEW -> "Selected Images"
-    AppScreen.COMPRESSION_SETTINGS -> "Compression Settings"
-    AppScreen.RESULTS -> "Compression Results"
-    AppScreen.IMAGE_COMPARE -> "Image Compare"
-    AppScreen.HISTORY -> "History"
-    AppScreen.SETTINGS -> "Settings"
-  }
+private val destinations = listOf(Triple(AppScreen.HOME, R.drawable.ic_photo_library, R.string.photos),
+  Triple(AppScreen.HISTORY, R.drawable.ic_history, R.string.history), Triple(AppScreen.SETTINGS, R.drawable.ic_settings, R.string.settings))
+private fun AppScreen.titleResource(): Int = when (this) {
+  AppScreen.ONBOARDING, AppScreen.HOME -> R.string.app_name
+  AppScreen.PREVIEW -> R.string.selected_title
+  AppScreen.COMPRESSION_SETTINGS -> R.string.choose_size
+  AppScreen.RESULTS -> R.string.results
+  AppScreen.IMAGE_COMPARE -> R.string.compare
+  AppScreen.HISTORY -> R.string.history
+  AppScreen.SETTINGS -> R.string.settings
+}

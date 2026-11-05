@@ -17,7 +17,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.imagecompressor.play.PlayEngagementViewModel
-import com.example.imagecompressor.ui.state.AppScreen
+import com.example.imagecompressor.play.isNaturalPlayPause
 import kotlinx.coroutines.delay
 
 /** Activity-owned launchers never escape into the process-scoped engagement policies. */
@@ -66,10 +66,7 @@ fun PlayEngagementHost(
     }
   }
 
-  val naturalPause = appState.screen == AppScreen.HOME &&
-    appState.selectedImages.isEmpty() && appState.compressedImages.isEmpty() &&
-    !appState.isLoadingImages && !appState.isCompressing && !appState.isSaving &&
-    !appState.isExternalFlowActive && appState.message == null
+  val naturalPause = appState.isNaturalPlayPause()
   // No loop on reviewBusy: an ineligible evaluation must not immediately schedule itself again.
   LaunchedEffect(naturalPause, feedback.foreground, uiReady, updates.isChecking, updates.status) {
     if (naturalPause && feedback.foreground && uiReady) {
