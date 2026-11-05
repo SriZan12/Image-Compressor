@@ -1,6 +1,8 @@
 package com.example.imagecompressor.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -48,15 +51,20 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.imagecompressor.R
+import com.example.imagecompressor.play.PlayEngagementViewModel
+import com.example.imagecompressor.play.PlayStoreListing
+import com.example.imagecompressor.play.update.UpdateStatus
 import com.example.imagecompressor.data.model.ThemePreference
 import com.example.imagecompressor.theme.FigmaUi
 import com.example.imagecompressor.theme.ImageCompressorTheme
 import com.example.imagecompressor.ui.components.toMimeType
+import com.example.imagecompressor.ui.components.UpdateBanner
 import com.example.imagecompressor.ui.state.AppScreen
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 import com.example.imagecompressor.util.ShareUtils
@@ -65,7 +73,10 @@ import kotlinx.coroutines.delay
 
 
 @Composable
-fun ImageCompressorRoot(viewModel: ImageCompressorViewModel = viewModel()) {
+fun ImageCompressorRoot(
+  viewModel: ImageCompressorViewModel = viewModel(),
+  playViewModel: PlayEngagementViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
   var showSplash by rememberSaveable { mutableStateOf(true) }
   val systemDarkTheme = isSystemInDarkTheme()
@@ -81,12 +92,14 @@ fun ImageCompressorRoot(viewModel: ImageCompressorViewModel = viewModel()) {
     showSplash = false
   }
 
+  PlayEngagementHost(appViewModel = viewModel, playViewModel = playViewModel, uiReady = !showSplash)
+
   ImageCompressorTheme(darkTheme = darkTheme) {
     if (showSplash) {
       SplashScreen()
     } else {
       Surface(modifier = Modifier.fillMaxSize(), color = FigmaUi.Background) {
-        ImageCompressorApp(state = state, viewModel = viewModel)
+        ImageCompressorApp(state = state, viewModel = viewModel, playViewModel = playViewModel)
       }
     }
   }
@@ -97,41 +110,102 @@ fun ImageCompressorRoot(viewModel: ImageCompressorViewModel = viewModel()) {
 private fun ImageCompressorApp(
   state: ImageCompressorUiState,
   viewModel: ImageCompressorViewModel,
+  playViewModel: PlayEngagementViewModel,
 ) {
   val context = LocalContext.current
   val snackbarHostState = remember { SnackbarHostState() }
+  val updates by playViewModel.updates.collectAsStateWithLifecycle()
+  val feedback by playViewModel.uiState.collectAsStateWithLifecycle()
   val multiPicker =
     rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
+      viewModel.endExternalFlow()
       viewModel.addSelectedImages(uris)
     }
   val singlePicker =
     rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+      viewModel.endExternalFlow()
       uri?.let { viewModel.addSelectedImages(listOf(it)) }
     }
-  var pendingSaveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+  val shareLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    viewModel.endExternalFlow()
+  }
+  val launchShare: (() -> Intent?) -> Unit = { createIntent ->
+    if (viewModel.beginExternalFlow()) {
+      try {
+        val intent = createIntent()
+        if (intent == null) viewModel.endExternalFlow() else shareLauncher.launch(intent)
+      } catch (_: ActivityNotFoundException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage("No app is available to share these photos.")
+      } catch (_: SecurityException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage("These photos could not be shared. Try saving them first.")
+      }
+    }
+  }
+  var pendingSavePath by rememberSaveable { mutableStateOf<String?>(null) }
+  var pendingSaveAll by rememberSaveable { mutableStateOf(false) }
   val permissionLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-      if (granted) pendingSaveAction?.invoke()
-      else viewModel.showMessage("Storage permission was not granted. The image was not saved.")
-      pendingSaveAction = null
+      viewModel.endExternalFlow()
+      if (granted) {
+        if (pendingSaveAll) viewModel.saveAllToGallery()
+        else pendingSavePath?.let { path ->
+          val current = viewModel.uiState.value
+          val image = current.compressedImages.find { it.outputFilePath == path }
+            ?: current.compareImage?.takeIf { it.outputFilePath == path }
+          image?.let(viewModel::saveToGallery)
+        }
+      } else viewModel.showMessage("Storage permission was not granted. The image was not saved.")
+      pendingSavePath = null
+      pendingSaveAll = false
     }
-  val withSavePermission: (() -> Unit) -> Unit = { action ->
+  val saveWithPermission: (String?) -> Unit = { path ->
     val needsLegacyPermission =
       Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
           PackageManager.PERMISSION_GRANTED
     if (needsLegacyPermission) {
-      pendingSaveAction = action
-      permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+      if (viewModel.beginExternalFlow()) {
+        pendingSavePath = path
+        pendingSaveAll = path == null
+        try {
+          permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } catch (_: RuntimeException) {
+          pendingSavePath = null
+          pendingSaveAll = false
+          viewModel.endExternalFlow()
+          viewModel.showMessage("Storage permission could not be requested. Please try again.")
+        }
+      }
+    } else if (path == null) {
+      viewModel.saveAllToGallery()
     } else {
-      action()
+      val current = viewModel.uiState.value
+      val image = current.compressedImages.find { it.outputFilePath == path }
+        ?: current.compareImage?.takeIf { it.outputFilePath == path }
+      image?.let(viewModel::saveToGallery)
     }
   }
   val selectOne = {
-    singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    if (viewModel.beginExternalFlow()) {
+      try {
+        singlePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+      } catch (_: RuntimeException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage("The photo picker is unavailable. Please try again.")
+      }
+    }
   }
   val selectMany = {
-    multiPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    if (viewModel.beginExternalFlow()) {
+      try {
+        multiPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+      } catch (_: RuntimeException) {
+        viewModel.endExternalFlow()
+        viewModel.showMessage("The photo picker is unavailable. Please try again.")
+      }
+    }
   }
 
   LaunchedEffect(state.message) {
@@ -139,6 +213,24 @@ private fun ImageCompressorApp(
       snackbarHostState.showSnackbar(it)
       viewModel.consumeMessage()
     }
+  }
+
+  LaunchedEffect(feedback.message) {
+    feedback.message?.let {
+      snackbarHostState.showSnackbar(it)
+      playViewModel.consumeMessage()
+    }
+  }
+
+  if (updates.isCompleting || updates.status == UpdateStatus.INSTALLING) {
+    AlertDialog(
+      onDismissRequest = {},
+      confirmButton = {},
+      title = { Text("Restarting to update", color = FigmaUi.Ink) },
+      text = { Text("Please wait while Google Play finishes the update.", color = FigmaUi.Body) },
+      containerColor = FigmaUi.Surface,
+      properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+    )
   }
 
   BackHandler(enabled = state.screen !in listOf(AppScreen.ONBOARDING, AppScreen.HOME)) {
@@ -164,70 +256,87 @@ private fun ImageCompressorApp(
     },
     snackbarHost = { SnackbarHost(snackbarHostState) },
   ) { padding ->
-    when (state.screen) {
-      AppScreen.ONBOARDING ->
-        OnboardingScreen(modifier = Modifier.padding(padding), onContinue = viewModel::completeOnboarding)
-      AppScreen.HOME ->
-        HomeScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onSelectImages = selectMany,
-          onReviewSelection = { viewModel.navigateTo(AppScreen.PREVIEW) },
-          onOpenHistory = { viewModel.navigateTo(AppScreen.HISTORY) },
-        )
-      AppScreen.PREVIEW ->
-        PreviewScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onSelectOne = selectOne,
-          onSelectMany = selectMany,
-          onRemove = viewModel::removeSelectedImage,
-          onContinue = { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) },
-        )
-      AppScreen.COMPRESSION_SETTINGS ->
-        CompressionSettingsScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          viewModel = viewModel,
-        )
-      AppScreen.RESULTS ->
-        ResultsScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onSave = { image -> withSavePermission { viewModel.saveToGallery(image) } },
-          onSaveAll = { withSavePermission(viewModel::saveAllToGallery) },
-          onShare = { ShareUtils.share(context, listOf(it)) },
-          onShareAll = { ShareUtils.share(context, state.compressedImages) },
-          onCompare = viewModel::openImageCompare,
-          onStartOver = viewModel::startOver,
-        )
-      AppScreen.IMAGE_COMPARE ->
-        ImageCompareScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onSave = { image -> withSavePermission { viewModel.saveToGallery(image) } },
-          onShare = { ShareUtils.share(context, listOf(it)) },
-        )
-      AppScreen.HISTORY ->
-        HistoryScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onDelete = viewModel::deleteHistory,
-          onShare = { item ->
-            ShareUtils.shareUri(
-              context,
-              (item.savedPath ?: item.compressedUri).toUri(),
-              item.outputFormat.toMimeType(),
+    Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+      val canRestart = !state.isCompressing && !state.isSaving && !state.isLoadingImages &&
+        !state.isExternalFlowActive && !feedback.reviewBusy && state.selectedImages.isEmpty() &&
+        state.compressedImages.none { it.savedUri == null }
+      UpdateBanner(update = updates, canRestart = canRestart, onRestart = playViewModel::restartUpdate)
+      Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        when (state.screen) {
+          AppScreen.ONBOARDING ->
+            OnboardingScreen(modifier = Modifier.fillMaxSize(), onContinue = viewModel::completeOnboarding)
+          AppScreen.HOME ->
+            HomeScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onSelectImages = selectMany,
+              onReviewSelection = { viewModel.navigateTo(AppScreen.PREVIEW) },
+              onOpenHistory = { viewModel.navigateTo(AppScreen.HISTORY) },
             )
-          },
-        )
-      AppScreen.SETTINGS ->
-        SettingsScreen(
-          state = state,
-          modifier = Modifier.padding(padding),
-          onSetTheme = viewModel::setThemePreference,
-          onClearHistory = viewModel::clearHistory,
-        )
+          AppScreen.PREVIEW ->
+            PreviewScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onSelectOne = selectOne,
+              onSelectMany = selectMany,
+              onRemove = viewModel::removeSelectedImage,
+              onContinue = { viewModel.navigateTo(AppScreen.COMPRESSION_SETTINGS) },
+            )
+          AppScreen.COMPRESSION_SETTINGS ->
+            CompressionSettingsScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              viewModel = viewModel,
+            )
+          AppScreen.RESULTS ->
+            ResultsScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onSave = { image -> saveWithPermission(image.outputFilePath) },
+              onSaveAll = { saveWithPermission(null) },
+              onShare = { image -> launchShare { ShareUtils.createShareIntent(context, listOf(image)) } },
+              onShareAll = { launchShare { ShareUtils.createShareIntent(context, state.compressedImages) } },
+              onCompare = viewModel::openImageCompare,
+              onStartOver = viewModel::startOver,
+            )
+          AppScreen.IMAGE_COMPARE ->
+            ImageCompareScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onSave = { image -> saveWithPermission(image.outputFilePath) },
+              onShare = { image -> launchShare { ShareUtils.createShareIntent(context, listOf(image)) } },
+            )
+          AppScreen.HISTORY ->
+            HistoryScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onDelete = viewModel::deleteHistory,
+              onShare = { item ->
+                launchShare {
+                  ShareUtils.createShareUriIntent(
+                    context,
+                    (item.savedPath ?: item.compressedUri).toUri(),
+                    item.outputFormat.toMimeType(),
+                  )
+                }
+              },
+            )
+          AppScreen.SETTINGS ->
+            SettingsScreen(
+              state = state,
+              modifier = Modifier.fillMaxSize(),
+              onSetTheme = viewModel::setThemePreference,
+              onClearHistory = viewModel::clearHistory,
+              updateState = updates,
+              onCheckForUpdates = playViewModel::checkForUpdates,
+              onRateApp = {
+                if (!PlayStoreListing.open(context)) {
+                  viewModel.showMessage("The Play Store listing could not be opened. Please try again later.")
+                }
+              },
+            )
+        }
+      }
     }
   }
 }

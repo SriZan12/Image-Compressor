@@ -7,8 +7,8 @@ import android.net.Uri
 import com.example.imagecompressor.data.model.CompressedImage
 
 object ShareUtils {
-  fun share(context: Context, images: List<CompressedImage>) {
-    if (images.isEmpty()) return
+  fun createShareIntent(context: Context, images: List<CompressedImage>): Intent? {
+    if (images.isEmpty()) return null
     val uris = ArrayList(images.map { it.outputUri })
     val intent =
       if (uris.size == 1) {
@@ -27,10 +27,10 @@ object ShareUtils {
       ClipData.newUri(context.contentResolver, "Compressed image", uris.first()).apply {
         uris.drop(1).forEach { addItem(ClipData.Item(it)) }
       }
-    context.startActivity(Intent.createChooser(intent, "Share compressed images"))
+    return Intent.createChooser(intent, "Share compressed images")
   }
 
-  fun shareUri(context: Context, uri: Uri, mimeType: String = "image/*") {
+  fun createShareUriIntent(context: Context, uri: Uri, mimeType: String = "image/*"): Intent {
     val intent =
       Intent(Intent.ACTION_SEND).apply {
         type = mimeType
@@ -38,6 +38,6 @@ object ShareUtils {
         clipData = ClipData.newUri(context.contentResolver, "Compressed image", uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
       }
-    context.startActivity(Intent.createChooser(intent, "Share compressed image"))
+    return Intent.createChooser(intent, "Share compressed image")
   }
 }

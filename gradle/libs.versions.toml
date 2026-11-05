@@ -14,8 +14,14 @@ coil = "2.7.0"
 exifInterface = "1.4.2"
 ksp = "2.3.9"
 room = "2.8.4"
+playAppUpdate = "2.1.0"
+playReview = "2.0.2"
+mockito = "5.24.0"
 
 [libraries]
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+play-app-update = { module = "com.google.android.play:app-update", version.ref = "playAppUpdate" }
+play-review = { module = "com.google.android.play:review", version.ref = "playReview" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidxComposeBom" }

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 
 class ImageCompressorViewModel(application: Application) : AndroidViewModel(application) {
   private val container = (application as ImageCompressorApplication).container
@@ -58,7 +59,13 @@ class ImageCompressorViewModel(application: Application) : AndroidViewModel(appl
       navigationFeature::showMessage
     )
   private val gallerySaveFeature =
-    GallerySaveFeature(_uiState, imageRepository, viewModelScope, navigationFeature::showMessage)
+    GallerySaveFeature(_uiState, imageRepository, viewModelScope, navigationFeature::showMessage) { count ->
+      viewModelScope.launch(Dispatchers.IO) {
+        container.reviewTracker.await().recordSuccessfulSaves(
+          container.playSessionId, count, System.currentTimeMillis(),
+        )
+      }
+    }
   private val historyFeature =
     HistoryFeature(imageRepository, viewModelScope, navigationFeature::showMessage)
   private val appSettingsFeature = SettingsFeature(preferencesRepository)
@@ -80,7 +87,9 @@ class ImageCompressorViewModel(application: Application) : AndroidViewModel(appl
 
   fun goBack() = navigationFeature.goBack()
 
-  fun addSelectedImages(uris: List<Uri>) = selectionFeature.addSelectedImages(uris)
+  fun addSelectedImages(uris: List<Uri>) {
+    if (canStartPhotoWork()) selectionFeature.addSelectedImages(uris)
+  }
 
   fun removeSelectedImage(image: SelectedImage) = selectionFeature.removeSelectedImage(image)
 
@@ -102,11 +111,17 @@ class ImageCompressorViewModel(application: Application) : AndroidViewModel(appl
 
   fun updateOutputFormat(outputFormat: OutputFormat) = settingsFeature.updateOutputFormat(outputFormat)
 
-  fun compressSelectedImages() = compressionFeature.compressSelectedImages()
+  fun compressSelectedImages() {
+    if (canStartPhotoWork()) compressionFeature.compressSelectedImages()
+  }
 
-  fun saveToGallery(image: CompressedImage) = gallerySaveFeature.saveToGallery(image)
+  fun saveToGallery(image: CompressedImage) {
+    if (canStartPhotoWork()) gallerySaveFeature.saveToGallery(image)
+  }
 
-  fun saveAllToGallery() = gallerySaveFeature.saveAllToGallery()
+  fun saveAllToGallery() {
+    if (canStartPhotoWork()) gallerySaveFeature.saveAllToGallery()
+  }
 
   fun startOver() = navigationFeature.startOver()
 
@@ -121,4 +136,22 @@ class ImageCompressorViewModel(application: Application) : AndroidViewModel(appl
   fun showMessage(message: String) = navigationFeature.showMessage(message)
 
   fun consumeMessage() = navigationFeature.consumeMessage()
+
+  fun beginExternalFlow(): Boolean {
+    if (!canStartPhotoWork()) return false
+    val current = _uiState.value
+    if (current.isExternalFlowActive || current.isSaving || current.isCompressing || current.isLoadingImages) return false
+    _uiState.update { it.copy(isExternalFlowActive = true) }
+    return true
+  }
+
+  fun endExternalFlow() {
+    _uiState.update { it.copy(isExternalFlowActive = false) }
+  }
+
+  private fun canStartPhotoWork(): Boolean {
+    // A synchronous guard also covers queued taps before the installing dialog recomposes.
+    val update = container.updateCoordinator.state.value
+    return !update.blocksPhotoWork
+  }
 }

@@ -34,5 +34,6 @@ data class ImageCompressorUiState(
   val isLoadingImages: Boolean = false,
   val isCompressing: Boolean = false,
   val isSaving: Boolean = false,
+  val isExternalFlowActive: Boolean = false,
   val message: String? = null,
 )

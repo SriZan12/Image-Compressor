@@ -51,3 +51,7 @@ Photo Picker grants access only to images selected by the user, so the app does 
 gallery-read access. Android 8 and 9 request legacy write permission only when saving a compressed
 image to the public Pictures directory. Android 10+ uses scoped storage and needs no runtime storage
 permission.
+
+## Google Play engagement
+
+The app supports flexible in-app updates, guarded restart, and optional review requests after meaningful successful use. Settings includes **Check for updates** and **Rate this app**. See [Google Play integration and testing](docs/GOOGLE_PLAY_TESTING.md) for configurable policies, lifecycle behavior, and the required Play testing-channel checks.
