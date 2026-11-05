@@ -18,6 +18,7 @@ import com.example.imagecompressor.data.preferences.AppPreferencesRepository
 import com.example.imagecompressor.ui.state.AppScreen
 import com.example.imagecompressor.ui.state.ImageCompressorUiState
 import com.example.imagecompressor.ui.state.EditorPreview
+import com.example.imagecompressor.ui.state.EditorAction
 import com.example.imagecompressor.ui.viewmodel.EditorExportFeature
 import com.example.imagecompressor.ui.viewmodel.CompressionSettingsFeature
 import com.example.imagecompressor.ui.viewmodel.GallerySaveFeature
@@ -31,6 +32,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.catch
@@ -53,6 +56,8 @@ class ImageCompressorViewModel internal constructor(
   private val imageRepository: ImageRepository,
   private val preferencesRepository: AppPreferencesRepository,
   previewProcessor: TemporaryImageProcessor = ImageCompressor(application).createPreviewProcessor(),
+  private val isPlayWorkAllowed: (() -> Boolean)? = null,
+  private val onSuccessfulSaves: ((Int) -> Unit)? = null,
 ) : AndroidViewModel(application) {
   constructor(application: Application, savedState: SavedStateHandle) : this(application, savedState,
     (application as ImageCompressorApplication).container.imageRepository,
@@ -72,7 +77,7 @@ class ImageCompressorViewModel internal constructor(
   private val editorResumed = MutableStateFlow(false)
   private val editorTargetDraftValid = MutableStateFlow(true)
   private val editorExportFeature = EditorExportFeature(_uiState, imageRepository, editorSession,
-    viewModelScope, { editorResumed.value }, { editorTargetDraftValid.value })
+    viewModelScope, { editorResumed.value }, { editorTargetDraftValid.value }, ::recordSuccessfulSaves)
 
   private val navigationFeature =
     NavigationFeature(
@@ -89,7 +94,8 @@ class ImageCompressorViewModel internal constructor(
       navigationFeature::showMessage
     )
   private val gallerySaveFeature =
-    GallerySaveFeature(_uiState, imageRepository, viewModelScope, navigationFeature::showMessage)
+    GallerySaveFeature(_uiState, imageRepository, viewModelScope, navigationFeature::showMessage,
+      ::recordSuccessfulSaves)
   private val historyFeature =
     HistoryFeature(imageRepository, viewModelScope, navigationFeature::showMessage)
   private val appSettingsFeature = SettingsFeature(preferencesRepository)
@@ -98,6 +104,9 @@ class ImageCompressorViewModel internal constructor(
 
   init {
     if (!savedState.contains("settings")) savedState["settings"] = SettingsCodec.encode(preferencesRepository.lastCompressionSettings)
+    viewModelScope.launch {
+      editorSession.isProcessing.collect { processing -> _uiState.update { it.copy(isEditorProcessing = processing) } }
+    }
     viewModelScope.launch {
       combine(editorSession.state, uiState.map { current ->
         current.editorRetained?.takeIf { it.settings == current.compressionSettings &&
@@ -111,7 +120,7 @@ class ImageCompressorViewModel internal constructor(
         val settings = current.compressionSettings
         val hasRetained = current.editorRetained?.let { it.settings == settings &&
           it.image.original == current.selectedImages.singleOrNull() } == true
-        val active = resumed && draftValid && current.screen == AppScreen.COMPRESSION_SETTINGS &&
+        val active = resumed && draftValid && canStartPhotoWork() && current.screen == AppScreen.COMPRESSION_SETTINGS &&
           !current.isInitializing && current.initializationError == null && !current.isLoadingImages &&
           !current.isCompressing && !hasRetained && current.selectedImages.all { image ->
             runCatching { CompressionPolicy.requestedSize(PixelSize(image.width, image.height), settings) }.isSuccess
@@ -133,14 +142,18 @@ class ImageCompressorViewModel internal constructor(
   }
 
   fun retryEditorPreview() {
-    if (_uiState.value.isSaving) return
+    if (!canStartPhotoWork() || _uiState.value.isSaving) return
     _uiState.update { it.copy(editorRetained = null, editorExportError = null) }
     editorSession.retry()
   }
 
-  fun saveEditorPhoto() = editorExportFeature.save()
+  fun saveEditorPhoto() {
+    if (canStartPhotoWork()) editorExportFeature.save()
+  }
 
-  fun shareEditorPhoto(onReady: (Uri) -> Unit) = editorExportFeature.share(onReady)
+  fun shareEditorPhoto(onReady: (Uri) -> Unit) {
+    if (canStartPhotoWork()) editorExportFeature.share { uri -> deliverPreparedShare { onReady(uri) } }
+  }
 
   override fun onCleared() {
     editorSession.close()
@@ -229,20 +242,29 @@ class ImageCompressorViewModel internal constructor(
   }
 
   fun shareResults(ids: List<Long>, onReady: (List<Uri>) -> Unit) {
-    if (_uiState.value.isInitializing) return
-    viewModelScope.launch {
-      try { onReady(ids.map { imageRepository.shareUri(it) }) }
-      catch (cancelled: CancellationException) { throw cancelled }
+    val current = _uiState.value
+    if (!canStartPhotoWork() || ids.isEmpty() || current.isInitializing || current.initializationError != null ||
+      current.isPreparingShare || current.isExternalFlowActive || current.isSaving || current.isCompressing ||
+      current.isLoadingImages || current.isCancelling) return
+    // Reserve before suspension. An update may not restart while durable URIs are being prepared.
+    _uiState.update { it.copy(isPreparingShare = true) }
+    val job = viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+      try {
+        val uris = ids.map { imageRepository.shareUri(it) }
+        if (canStartPhotoWork()) deliverPreparedShare { onReady(uris) }
+      } catch (cancelled: CancellationException) { throw cancelled }
       catch (failure: Exception) { showMessage(userMessage(failure, "Unable to share these images.")) }
     }
+    job.invokeOnCompletion { _uiState.update { it.copy(isPreparingShare = false) } }
   }
 
   fun openHistory(item: CompressionHistoryEntity) {
+    if (!canStartPhotoWork()) return
     viewModelScope.launch {
       try {
         val result = imageRepository.getResult(item.id)
         if (result == null) showMessage("This result is unavailable. Select the original again.")
-        else navigationFeature.openImageCompare(result)
+        else if (canStartPhotoWork()) navigationFeature.openImageCompare(result)
       } catch (cancelled: CancellationException) { throw cancelled }
       catch (failure: Exception) { showMessage(userMessage(failure, "Unable to open this result.")) }
     }
@@ -250,15 +272,24 @@ class ImageCompressorViewModel internal constructor(
 
   fun completeOnboarding() = navigationFeature.completeOnboarding()
 
-  fun navigateTo(screen: AppScreen) = navigationFeature.navigateTo(screen)
+  fun navigateTo(screen: AppScreen) {
+    if (canStartPhotoWork()) navigationFeature.navigateTo(screen)
+  }
 
-  fun goBack() = navigationFeature.goBack()
+  fun goBack() {
+    if (canStartPhotoWork()) navigationFeature.goBack()
+  }
 
-  fun addSelectedImages(uris: List<Uri>) = selectionFeature.addSelectedImages(uris)
+  fun addSelectedImages(uris: List<Uri>) {
+    if (canStartPhotoWork()) selectionFeature.addSelectedImages(uris)
+  }
 
-  fun replaceSelectedImages(uris: List<Uri>) = selectionFeature.addSelectedImages(uris, replace = true)
+  fun replaceSelectedImages(uris: List<Uri>) {
+    if (canStartPhotoWork()) selectionFeature.addSelectedImages(uris, replace = true)
+  }
 
   fun previewSelectedImage(image: SelectedImage) {
+    if (!canStartPhotoWork()) return
     val current = _uiState.value
     if (current.screen != AppScreen.COMPRESSION_SETTINGS || current.isSaving || current.isCompressing ||
       current.isLoadingImages || current.selectedImages.none { it == image } || current.editorSource == image) return
@@ -266,41 +297,70 @@ class ImageCompressorViewModel internal constructor(
       editorRetained = null, editorExportError = null) }
   }
 
-  fun removeSelectedImage(image: SelectedImage) = selectionFeature.removeSelectedImage(image)
+  fun removeSelectedImage(image: SelectedImage) {
+    if (canStartPhotoWork()) selectionFeature.removeSelectedImage(image)
+  }
 
-  fun clearSelectedImages() = selectionFeature.clearSelectedImages()
+  fun clearSelectedImages() {
+    if (canStartPhotoWork()) selectionFeature.clearSelectedImages()
+  }
 
-  fun updateCompressionSettings(settings: CompressionSettings) = settingsFeature.applySettings(settings)
+  fun updateCompressionSettings(settings: CompressionSettings) {
+    if (canStartPhotoWork()) settingsFeature.applySettings(settings)
+  }
 
   fun setDynamicColor(enabled: Boolean) = preferencesRepository.setDynamicColor(enabled)
 
-  fun updateQuality(quality: Int) = settingsFeature.updateQuality(quality)
+  fun updateQuality(quality: Int) {
+    if (canStartPhotoWork()) settingsFeature.updateQuality(quality)
+  }
 
-  fun updateTargetBytes(targetBytes: Long?) = settingsFeature.updateTargetBytes(targetBytes)
+  fun updateTargetBytes(targetBytes: Long?) {
+    if (canStartPhotoWork()) settingsFeature.updateTargetBytes(targetBytes)
+  }
 
-  fun updateAllowTargetResize(allow: Boolean) = settingsFeature.updateAllowTargetResize(allow)
+  fun updateAllowTargetResize(allow: Boolean) {
+    if (canStartPhotoWork()) settingsFeature.updateAllowTargetResize(allow)
+  }
 
-  fun updateResizeMode(resizeMode: ResizeMode) = settingsFeature.updateResizeMode(resizeMode)
+  fun updateResizeMode(resizeMode: ResizeMode) {
+    if (canStartPhotoWork()) settingsFeature.updateResizeMode(resizeMode)
+  }
 
-  fun updateResizePercent(percent: Int) = settingsFeature.updateResizePercent(percent)
+  fun updateResizePercent(percent: Int) {
+    if (canStartPhotoWork()) settingsFeature.updateResizePercent(percent)
+  }
 
-  fun updateCustomWidth(width: String) = settingsFeature.updateCustomWidth(width)
+  fun updateCustomWidth(width: String) {
+    if (canStartPhotoWork()) settingsFeature.updateCustomWidth(width)
+  }
 
-  fun updateCustomHeight(height: String) = settingsFeature.updateCustomHeight(height)
+  fun updateCustomHeight(height: String) {
+    if (canStartPhotoWork()) settingsFeature.updateCustomHeight(height)
+  }
 
-  fun updatePreserveAspectRatio(preserve: Boolean) = settingsFeature.updatePreserveAspectRatio(preserve)
+  fun updatePreserveAspectRatio(preserve: Boolean) {
+    if (canStartPhotoWork()) settingsFeature.updatePreserveAspectRatio(preserve)
+  }
 
-  fun updateOutputFormat(outputFormat: OutputFormat) = settingsFeature.updateOutputFormat(outputFormat)
+  fun updateOutputFormat(outputFormat: OutputFormat) {
+    if (canStartPhotoWork()) settingsFeature.updateOutputFormat(outputFormat)
+  }
 
   fun compressSelectedImages() {
+    if (!canStartPhotoWork()) return
     // Release live work before the retained batch enters the same native pipeline.
     editorSession.request(null, _uiState.value.compressionSettings)
     compressionFeature.compressSelectedImages()
   }
 
-  fun saveToGallery(image: CompressedImage) = gallerySaveFeature.saveToGallery(image)
+  fun saveToGallery(image: CompressedImage) {
+    if (canStartPhotoWork()) gallerySaveFeature.saveToGallery(image)
+  }
 
-  fun saveAllToGallery() = gallerySaveFeature.saveAllToGallery()
+  fun saveAllToGallery() {
+    if (canStartPhotoWork()) gallerySaveFeature.saveAllToGallery()
+  }
 
   fun startOver(onReady: () -> Unit = {}) {
     if (_uiState.value.isCompressing || _uiState.value.isSaving) return
@@ -312,9 +372,13 @@ class ImageCompressorViewModel internal constructor(
   }
 
   fun cancelCompression() = compressionFeature.cancel()
-  fun retryRemaining() = compressionFeature.retryRemaining()
+  fun retryRemaining() {
+    if (canStartPhotoWork()) compressionFeature.retryRemaining()
+  }
 
-  fun openImageCompare(image: CompressedImage) = navigationFeature.openImageCompare(image)
+  fun openImageCompare(image: CompressedImage) {
+    if (canStartPhotoWork()) navigationFeature.openImageCompare(image)
+  }
 
   fun deleteHistory(item: CompressionHistoryEntity) = historyFeature.deleteHistory(item)
 
@@ -325,4 +389,51 @@ class ImageCompressorViewModel internal constructor(
   fun showMessage(message: String) = navigationFeature.showMessage(message)
 
   fun consumeMessage() = navigationFeature.consumeMessage()
+
+  fun beginExternalFlow(): Boolean {
+    if (!canStartPhotoWork()) return false
+    val current = _uiState.value
+    if (current.isInitializing || current.initializationError != null || current.isExternalFlowActive ||
+      current.isSaving || current.isCompressing || current.isLoadingImages || current.isCancelling ||
+      current.isPreparingShare) return false
+    _uiState.update { it.copy(isExternalFlowActive = true) }
+    return true
+  }
+
+  private var deliveringPreparedShare = false
+
+  /** Only the verified URI callback can transfer an export/preparation lease to the share sheet. */
+  fun beginPreparedShare(): Boolean {
+    val current = _uiState.value
+    if (!deliveringPreparedShare || !canStartPhotoWork() || current.isExternalFlowActive ||
+      current.isInitializing || current.initializationError != null || current.isCompressing ||
+      current.isLoadingImages || current.isCancelling ||
+      (current.isSaving && current.editorAction != EditorAction.SHARE)) return false
+    _uiState.update { it.copy(isExternalFlowActive = true) }
+    return true
+  }
+
+  private fun deliverPreparedShare(callback: () -> Unit) {
+    deliveringPreparedShare = true
+    try { callback() } finally { deliveringPreparedShare = false }
+  }
+
+  fun endExternalFlow() {
+    _uiState.update { it.copy(isExternalFlowActive = false) }
+  }
+
+  private fun canStartPhotoWork(): Boolean {
+    // Injectable repositories in tests need no custom Application or live Google Play service.
+    return isPlayWorkAllowed?.invoke() ?: ((getApplication<Application>() as? ImageCompressorApplication)
+      ?.container?.updateCoordinator?.state?.value?.blocksPhotoWork != true)
+  }
+
+  private fun recordSuccessfulSaves(count: Int) {
+    if (count <= 0) return
+    onSuccessfulSaves?.let { it(count); return }
+    val container = (getApplication<Application>() as? ImageCompressorApplication)?.container ?: return
+    viewModelScope.launch(Dispatchers.IO) {
+      container.reviewTracker.await().recordSuccessfulSaves(container.playSessionId, count, System.currentTimeMillis())
+    }
+  }
 }

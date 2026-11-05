@@ -9,6 +9,7 @@ import com.example.imagecompressor.data.local.CompressionHistoryEntity
 import com.example.imagecompressor.data.model.*
 import com.example.imagecompressor.data.preferences.AppPreferencesRepository
 import com.example.imagecompressor.ui.ImageCompressorViewModel
+import com.example.imagecompressor.play.toPlayWorkSafety
 import com.example.imagecompressor.ui.state.AppScreen
 import com.example.imagecompressor.ui.state.EditorAction
 import com.example.imagecompressor.ui.state.EditorPreview
@@ -364,13 +365,168 @@ class EditorExportViewModelTest {
     }
   }
 
+  @Test fun engagementCountsOnlyNewConfirmedEditorSavesAndNeverSharesFailuresOrRetries() = runTest {
+    var count = 0
+    withHarness(onSuccessfulSaves = { count += it }) {
+      preparePhoto(this@runTest)
+      vm.shareEditorPhoto { }
+      runCurrent()
+      assertEquals(0, count)
+      repository.beforeSave = { throw IOException("Storage full") }
+      vm.saveEditorPhoto()
+      runCurrent()
+      assertEquals(0, count)
+      repository.beforeSave = {}
+      vm.saveEditorPhoto()
+      runCurrent()
+      assertEquals(1, count)
+      vm.saveEditorPhoto()
+      vm.shareEditorPhoto { }
+      runCurrent()
+      assertEquals(1, count)
+    }
+  }
+
+  @Test fun preparedEditorShareTransfersItsOwnExportLeaseToExternalActivityExactlyOnce() = runTest {
+    withHarness {
+      preparePhoto(this@runTest)
+      assertFalse(vm.beginPreparedShare())
+      var delivered = false
+      vm.shareEditorPhoto {
+        delivered = true
+        assertTrue(vm.uiState.value.isSaving)
+        assertEquals(EditorAction.SHARE, vm.uiState.value.editorAction)
+        assertTrue(vm.beginPreparedShare())
+        assertFalse(vm.beginPreparedShare())
+        assertTrue(vm.uiState.value.toPlayWorkSafety().isBusy)
+      }
+      runCurrent()
+      assertTrue(delivered)
+      assertFalse(vm.uiState.value.isSaving)
+      assertTrue(vm.uiState.value.isExternalFlowActive)
+      assertFalse(vm.beginPreparedShare())
+      vm.endExternalFlow()
+      assertFalse(vm.uiState.value.isExternalFlowActive)
+    }
+  }
+
+  @Test fun durableSharePreparationBlocksRestartAndDuplicatesUntilChooserReservation() = runTest {
+    withHarness {
+      val result = durable(photo("one"), 42)
+      repository.seed(result)
+      val release = CompletableDeferred<Unit>()
+      repository.beforeShare = { release.await() }
+      var callbacks = 0
+      vm.shareResults(listOf(42)) {
+        callbacks++
+        assertTrue(vm.uiState.value.isPreparingShare)
+        assertTrue(vm.beginPreparedShare())
+      }
+      assertTrue(vm.uiState.value.isPreparingShare)
+      assertFalse(vm.uiState.value.toPlayWorkSafety().canRestart)
+      vm.shareResults(listOf(42)) { fail("Duplicate share preparation") }
+      runCurrent()
+      assertEquals(listOf(42L), repository.shareCalls)
+      release.complete(Unit)
+      runCurrent()
+      assertEquals(1, callbacks)
+      assertFalse(vm.uiState.value.isPreparingShare)
+      assertTrue(vm.uiState.value.isExternalFlowActive)
+      vm.endExternalFlow()
+      assertTrue(vm.uiState.value.toPlayWorkSafety().canRestart)
+    }
+  }
+
+  @Test fun failedSharePreparationReleasesTheUpdateSafetyGateWithoutLaunching() = runTest {
+    withHarness {
+      repository.beforeShare = { throw IOException("Copy unavailable") }
+      vm.shareResults(listOf(42)) { fail("Failed preparation must not launch") }
+      runCurrent()
+      assertFalse(vm.uiState.value.isPreparingShare)
+      assertFalse(vm.uiState.value.isExternalFlowActive)
+      assertFalse(vm.beginPreparedShare())
+    }
+  }
+
+  @Test fun acceptedPlayInstallSynchronouslyBlocksEveryPhotoWorkEntryPoint() = runTest {
+    var allowWork = true
+    withHarness(playWorkAllowed = { allowWork }) {
+      preparePhoto(this@runTest)
+      val original = vm.uiState.value.selectedImages
+      allowWork = false
+      vm.saveEditorPhoto()
+      vm.shareEditorPhoto { fail("Installing must not share") }
+      vm.saveToGallery(ready().image)
+      vm.saveAllToGallery()
+      vm.shareResults(listOf(42)) { fail("Installing must not prepare sharing") }
+      vm.compressSelectedImages()
+      vm.retryRemaining()
+      vm.addSelectedImages(listOf(photo("second").uri))
+      vm.replaceSelectedImages(listOf(photo("third").uri))
+      assertFalse(vm.beginExternalFlow())
+      runCurrent()
+      assertEquals(original, vm.uiState.value.selectedImages)
+      assertTrue(repository.retainedCandidates.isEmpty())
+      assertTrue(repository.saveCalls.isEmpty())
+      assertTrue(repository.shareCalls.isEmpty())
+      assertEquals(0, repository.batchWrites)
+      allowWork = true
+      vm.saveEditorPhoto()
+      runCurrent()
+      assertEquals(1, repository.saveCalls.size)
+    }
+  }
+
+  @Test fun queuedEditorNavigationAndSettingsCannotStartWorkAfterSavedHomeRestartIsAccepted() = runTest {
+    var allowWork = true
+    val source = photo("one")
+    val saved = durable(source, 42).copy(savedUri = gallery(42))
+    val settings = CompressionSettings(quality = 63, targetBytes = 500_000)
+    val repository = RecordingRepository().apply {
+      seed(saved)
+      batch.value = BatchSnapshot("saved", settings, BatchStatus.COMPLETED,
+        listOf(BatchItem("one", source, ItemStatus.COMPLETED, saved)))
+    }
+    val state = SavedStateHandle(mapOf("selection" to arrayListOf(source.uri.toString()),
+      "settings" to SettingsCodec.encode(settings)))
+    withHarness(repository, state, playWorkAllowed = { allowWork }) {
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+      assertNull(vm.uiState.value.editorRetained)
+      assertTrue(vm.uiState.value.toPlayWorkSafety().canRestart)
+      allowWork = false
+      vm.setEditorResumed(true)
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
+      vm.updateQuality(30)
+      vm.updateCompressionSettings(settings.copy(targetBytes = 80_000))
+      vm.previewSelectedImage(source)
+      vm.retryEditorPreview()
+      vm.openImageCompare(saved)
+      vm.openHistory(repository.history.value.single())
+      runCurrent()
+      advanceTimeBy(1_000)
+      runCurrent()
+      assertEquals(AppScreen.HOME, vm.uiState.value.screen)
+      assertEquals(settings, vm.uiState.value.compressionSettings)
+      assertEquals(listOf(source), vm.uiState.value.selectedImages)
+      assertTrue(processor.prepared.isEmpty())
+      allowWork = true
+      vm.navigateTo(AppScreen.COMPRESSION_SETTINGS)
+      runCurrent()
+      advanceTimeBy(150)
+      runCurrent()
+      assertEquals(1, processor.prepared.size)
+    }
+  }
+
   private suspend fun TestScope.withHarness(
     repository: RecordingRepository = RecordingRepository(),
     savedState: SavedStateHandle = SavedStateHandle(),
+    playWorkAllowed: () -> Boolean = { true },
+    onSuccessfulSaves: (Int) -> Unit = {},
     block: suspend Harness.() -> Unit,
   ) {
     Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    val harness = Harness(repository, savedState)
+    val harness = Harness(repository, savedState, playWorkAllowed, onSuccessfulSaves)
     try {
       runCurrent()
       assertFalse(harness.vm.uiState.value.isInitializing)
@@ -383,12 +539,14 @@ class EditorExportViewModelTest {
     }
   }
 
-  private class Harness(val repository: RecordingRepository, val savedState: SavedStateHandle) {
+  private class Harness(val repository: RecordingRepository, val savedState: SavedStateHandle,
+    playWorkAllowed: () -> Boolean, onSuccessfulSaves: (Int) -> Unit) {
     val preferences = MemoryPreferences()
     val processor = RecordingPreviewProcessor()
     val store = ViewModelStore()
     val vm = ImageCompressorViewModel(RuntimeEnvironment.getApplication(), savedState,
-      repository, preferences, previewProcessor = processor).also { store.put("editor", it) }
+      repository, preferences, previewProcessor = processor, isPlayWorkAllowed = playWorkAllowed,
+      onSuccessfulSaves = onSuccessfulSaves).also { store.put("editor", it) }
 
     fun preparePhoto(scope: TestScope) {
       vm.addSelectedImages(listOf(photo("first").uri))
@@ -439,6 +597,7 @@ class EditorExportViewModelTest {
     var batchWrites = 0
     var beforeRetain: suspend () -> Unit = {}
     var beforeSave: suspend () -> Unit = {}
+    var beforeShare: suspend () -> Unit = {}
     private val records = linkedMapOf<Long, CompressedImage>()
     private var nextId = 1L
 
@@ -470,6 +629,7 @@ class EditorExportViewModelTest {
     override suspend fun getResult(id: Long) = records[id]
     override suspend fun shareUri(id: Long): Uri {
       shareCalls += id
+      beforeShare()
       return checkNotNull(records[id]).outputUri
     }
 

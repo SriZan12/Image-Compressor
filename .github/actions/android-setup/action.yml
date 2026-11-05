@@ -15,5 +15,5 @@ runs:
     - name: Install Android SDK packages
       shell: bash
       run: |
-        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37' 'build-tools;36.0.0' 'platform-tools'
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;36.0.0' 'platform-tools'
         printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties

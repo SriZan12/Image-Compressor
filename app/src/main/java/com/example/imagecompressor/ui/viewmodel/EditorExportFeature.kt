@@ -30,6 +30,7 @@ class EditorExportFeature(
   private val scope: CoroutineScope,
   private val isResumed: () -> Boolean,
   private val isTargetDraftValid: () -> Boolean,
+  private val onSuccessfulSaves: (Int) -> Unit = {},
 ) {
   fun save() = export(EditorAction.SAVE)
 
@@ -82,6 +83,11 @@ class EditorExportFeature(
             if (saved.historyId != durable.historyId || !saved.matchesMeasuredImage(durable) || saved.savedUri == null)
               throw IOException("We couldn’t confirm where this photo was saved. Please try again.")
             publishReceipt(saved, source, settings)
+            if (durable.savedUri == null) {
+              try { onSuccessfulSaves(1) }
+              catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { /* Engagement must never turn a successful save into an error. */ }
+            }
             state.update { it.copy(message = "Saved to Pictures / Image Compressor.") }
           }
           EditorAction.SHARE -> {

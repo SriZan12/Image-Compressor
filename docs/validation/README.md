@@ -78,7 +78,7 @@ python3 tools/validation/check_device_results.py \
 
 Substitute `--api 31` when running on API 31. On this cloud host use
 `/workspace/.image-compressor/gradle.sh` instead of `bash gradlew`; build outputs
-are under `/workspace/.image-compressor/builds/app`. This host has no attached
+are under the repository's `app/build` with the current helper. This host has no attached
 Android device and no KVM. Its earlier software emulator attempt failed before
 JUnit, so it is not used to produce device acceptance evidence.
 

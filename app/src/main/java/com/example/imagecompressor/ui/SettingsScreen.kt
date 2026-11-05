@@ -14,6 +14,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.imagecompressor.R
+import com.example.imagecompressor.play.update.UpdateState
+import com.example.imagecompressor.play.update.UpdateStatus
 import com.example.imagecompressor.data.model.ThemePreference
 import com.example.imagecompressor.data.model.toReadableSize
 import com.example.imagecompressor.theme.Space
@@ -22,7 +24,9 @@ import com.example.imagecompressor.ui.state.ImageCompressorUiState
 
 @Composable
 fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier, onSetTheme: (ThemePreference) -> Unit,
-  onSetDynamicColor: (Boolean) -> Unit, onClearHistory: () -> Unit) {
+  onSetDynamicColor: (Boolean) -> Unit, onClearHistory: () -> Unit,
+  updateState: UpdateState = UpdateState(), onCheckForUpdates: () -> Unit = {},
+  onRateApp: () -> Unit = {}, playActionsEnabled: Boolean = true) {
   var clear by rememberSaveable { mutableStateOf(false) }
   if (clear) AlertDialog(onDismissRequest = { clear = false }, title = { Text(stringResource(R.string.clear_history_title)) },
     text = { Text(stringResource(R.string.clear_history_body)) },
@@ -43,6 +47,34 @@ fun SettingsScreen(state: ImageCompressorUiState, modifier: Modifier = Modifier,
       }
       HorizontalDivider()
       SettingSwitch(stringResource(R.string.device_colors), stringResource(R.string.device_colors_body), state.dynamicColor, onSetDynamicColor)
+    }
+    SectionCard {
+      Text(stringResource(R.string.play_updates_title), style = MaterialTheme.typography.titleLarge,
+        modifier = Modifier.semantics { heading() })
+      val message = when {
+        updateState.isChecking -> R.string.play_checking_detail
+        updateState.isCompleting || updateState.status == UpdateStatus.INSTALLING -> R.string.play_finishing_update
+        updateState.status == UpdateStatus.UP_TO_DATE -> R.string.play_up_to_date
+        updateState.status == UpdateStatus.AVAILABLE -> R.string.play_update_available
+        updateState.status == UpdateStatus.PENDING -> R.string.play_update_pending_detail
+        updateState.status == UpdateStatus.DOWNLOADING -> R.string.play_update_downloading_detail
+        updateState.status == UpdateStatus.DOWNLOADED -> R.string.play_update_ready_detail
+        updateState.status == UpdateStatus.CANCELED -> R.string.play_update_canceled
+        updateState.status == UpdateStatus.FAILED -> R.string.play_update_unavailable
+        else -> R.string.play_updates_description
+      }
+      Text(stringResource(message), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+      val canOpenPlay = playActionsEnabled && !state.isCompressing && !state.isSaving &&
+        !state.isLoadingImages && !state.isExternalFlowActive && !state.isPreparingShare &&
+        !state.isInitializing && !state.isCancelling && state.editorAction == null
+      ActionButton(stringResource(if (updateState.isChecking) R.string.play_checking else R.string.play_check_updates),
+        onCheckForUpdates, Modifier.fillMaxWidth(), R.drawable.ic_download, secondary = true,
+        enabled = canOpenPlay && !updateState.isChecking && !updateState.isCompleting && updateState.activePrompt == null)
+      ActionButton(stringResource(R.string.play_rate_app), onRateApp, Modifier.fillMaxWidth(), secondary = true,
+        enabled = canOpenPlay && !updateState.isCompleting && updateState.activePrompt == null)
+      Text(stringResource(R.string.play_rate_description), style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     SectionCard {
       Text(stringResource(R.string.storage), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })

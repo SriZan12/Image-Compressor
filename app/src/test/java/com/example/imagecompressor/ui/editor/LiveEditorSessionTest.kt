@@ -170,6 +170,29 @@ class LiveEditorSessionTest {
     assertEquals(1, processor.closes)
   }
 
+  @Test fun suspendingEditorInvalidatesPreviewButKeepsWorkSafetyBusyUntilNativeDrainCompletes() = runTest {
+    val processor = FakeProcessor()
+    val release = CompletableDeferred<Unit>()
+    processor.prepare = { image, settings -> withContext(NonCancellable) {
+      release.await()
+      processor.output(image, settings)
+    } }
+    val session = LiveEditorSession(backgroundScope, processor)
+    session.request(source("one"), settings(80))
+    finishDebounce()
+    assertTrue(session.isProcessing.value)
+    session.request(null, settings(80))
+    assertEquals(EditorPreview.NotCalculated, session.state.value)
+    runCurrent()
+    assertTrue(session.isProcessing.value)
+    release.complete(Unit)
+    runCurrent()
+    assertFalse(session.isProcessing.value)
+    assertEquals(1, processor.outputs.single().disposals)
+    session.close()
+    runCurrent()
+  }
+
   @Test fun closeInvalidatesImmediatelyAndDisposesALateResultBeforeClosingTheProcessor() = runTest {
     val processor = FakeProcessor()
     val release = CompletableDeferred<Unit>()
@@ -187,10 +210,12 @@ class LiveEditorSessionTest {
     runCurrent()
     assertEquals(0, processor.closes)
     assertEquals(1, processor.active)
+    assertTrue("Update safety must remain busy while a cancelled codec drains", session.isProcessing.value)
     release.complete(Unit)
     runCurrent()
     assertEquals(1, processor.outputs.single().disposals)
     assertEquals(0, processor.active)
+    assertFalse(session.isProcessing.value)
     assertEquals(1, processor.closes)
     assertEquals(1, processor.calls.size)
     assertEquals(EditorPreview.NotCalculated, session.state.value)

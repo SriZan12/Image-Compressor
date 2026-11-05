@@ -112,6 +112,8 @@ room {
 }
 
 dependencies {
+  implementation(libs.play.app.update)
+  implementation(libs.play.review)
   val composeBom = platform(libs.androidx.compose.bom)
   implementation(composeBom)
   androidTestImplementation(composeBom)
@@ -141,6 +143,7 @@ dependencies {
   testImplementation(composeBom)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.junit)
+  testImplementation(libs.mockito.core)
   testImplementation(libs.robolectric)
   testImplementation(libs.kotlinx.coroutines.test)
   // Instrumented tests: jUnit rules and runners

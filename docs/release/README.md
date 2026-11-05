@@ -30,8 +30,8 @@ bash gradlew testDebugUnitTest testReleaseUnitTest lintDebug lintRelease \
 bash gradlew -PandroidTestBuildType=qa assembleQa assembleQaAndroidTest
 ```
 
-On this managed workspace, use `/workspace/.image-compressor/gradle.sh`; build
-outputs are under `/workspace/.image-compressor/builds/app`.
+On this managed workspace, use `/workspace/.image-compressor/gradle.sh`; the current
+helper writes build outputs to `app/build` in the repository.
 
 Inspect the actual packaged APK, not only the source manifest:
 

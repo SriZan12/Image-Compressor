@@ -4,8 +4,10 @@ Effective date: 31 October 2026.
 
 Shrink makes photos smaller on your Android device. It does not send your photos,
 file names, editing settings, or compression history to a server. It has no
-accounts, advertising, analytics, or remote crash-reporting service, and does not
-request Internet access.
+app accounts, advertising, analytics, or remote crash-reporting service. Shrink
+does not request Android’s Internet permission. Google Play and apps you choose
+for sharing or opening links can use their own network connections as described
+below.
 
 ## Photos and local storage
 
@@ -28,6 +30,28 @@ are provided only when you choose Share and select a receiving app. That app
 handles the photo according to its own privacy policy. Shrink removes location
 and other original EXIF metadata from newly encoded copies; visible information
 inside the picture remains visible.
+
+## Google Play updates and reviews
+
+Shrink uses Google Play to check for available app updates and may offer an
+optional review after successful use. Google Play handles update delivery and
+its review interface through its own services. These features depend on Google
+Play availability and may use the Google account configured on your device.
+Shrink does not send your photos, file names, editing settings, or compression
+history to Google Play through these features.
+
+Shrink stores small review-eligibility records on your device: successful-save
+counts, random app-session identifiers, and dates used to space out review attempts.
+They are used only to decide when to request the optional review interface and
+are excluded from the app’s cloud backup and device-transfer rules. They are
+not uploaded to the publisher. Shrink does not know whether Google Play displayed
+the review dialog or whether you submitted a review.
+
+**Rate this app** opens the app’s Google Play listing, using your browser if the
+Play Store cannot open it. Any rating or review you choose to submit is handled
+by Google Play under [Google’s privacy policy](https://policies.google.com/privacy)
+and its applicable terms. You can continue compressing and saving photos offline
+without updating or leaving a review.
 
 ## Contact
 

@@ -39,6 +39,9 @@ class LiveEditorSession(
   private val requests = Channel<Request>(Channel.CONFLATED)
   private val mutableState = MutableStateFlow<EditorPreview>(EditorPreview.NotCalculated)
   val state: StateFlow<EditorPreview> = mutableState.asStateFlow()
+  private val mutableProcessing = MutableStateFlow(false)
+  /** Remains true until even a non-cooperative native operation has drained after cancellation. */
+  val isProcessing: StateFlow<Boolean> = mutableProcessing.asStateFlow()
   private var generation = 0L
   private var input: Input? = null
   private var active: Job? = null
@@ -123,6 +126,7 @@ class LiveEditorSession(
   private suspend fun prepare(request: Request) {
     val snapshot = checkNotNull(request.input)
     var candidate: TemporaryPreview? = null
+    mutableProcessing.value = true
     try {
       delay(debounceMillis)
       if (!isCurrent(request)) return
@@ -158,7 +162,7 @@ class LiveEditorSession(
       discard?.close()
     } finally {
       // Includes noncooperative completions from a cancelled or superseded generation.
-      candidate?.close()
+      try { candidate?.close() } finally { mutableProcessing.value = false }
     }
   }
 
